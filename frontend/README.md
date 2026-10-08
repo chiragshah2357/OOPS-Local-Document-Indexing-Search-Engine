@@ -11,22 +11,25 @@ cd frontend
 python -m http.server 5173
 ```
 
-Open http://localhost:5173/app.html. The first load needs an internet connection for the fonts and icons (see Credits).
+Open http://localhost:5173. The first load needs an internet connection for the fonts and icons (see Credits).
 
 ## Pages
 
 | File | What it is |
 |---|---|
+| `index.html` | Landing page. The search box in the hero is a working demo on the sample files. |
 | `app.html` | The search app: index a folder, search it, see ranked results and history. |
 
 ## Structure
 
 ```
 css/base.css      tokens, type, nav, buttons, motion rules (shared)
+css/landing.css   landing page
 css/app.css       search app
 js/shared.js      small helpers: escaping, highlighting, count-up
 js/mock-data.js   six sample documents used in demo mode
 js/api.js         the only file that talks to a data source
+js/landing.js     scroll reveals and the hero demo
 js/app.js         indexing, searching, results, history
 ```
 
@@ -38,7 +41,8 @@ js/app.js         indexing, searching, results, history
 const USE_MOCK = true;
 ```
 
-While it is `true`, the browser answers every request itself from `js/mock-data.js`, so the UI works before the backend exists. When the Java backend is ready, set it to `false`. The same calls then go to the endpoints below, and no other file needs to change.
+While it is `true`, the browser answers every request itself from `js/mock-data.js`, so the UI works before the backend exists. When the Java backend is ready, set it to `false`. The same calls then go to the endpoints below, and no other file needs to change. The landing-page demo keeps using the sample files either way.
+
 ### API contract the backend should follow
 
 | Request | Body or query | Response |
