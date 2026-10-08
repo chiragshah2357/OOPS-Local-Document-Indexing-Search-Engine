@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Search: DocIndex</title>
+  <meta name="description" content="Index a folder of text files and search across them, ranked by keyword frequency.">
+  <script>document.documentElement.classList.add("js");</script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <header class="nav">
+    <div class="wrap nav__in">
+      <a class="brand" href="app.html" aria-label="DocIndex home">
+        <span class="brand__mark" aria-hidden="true"></span>DocIndex
+      </a>
+      <div class="who" aria-label="Student details">
+        <span class="who__name">Chirag Shah</span>
+        <span class="who__id">2503080249</span>
+        <span class="who__sec">Section T4</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap app">
+    <section class="app__search" aria-labelledby="app-title">
+      <h1 class="app__title rise" id="app-title">Search your documents</h1>
+
+      <form class="rise" style="--i: 1" id="search-form" role="search" autocomplete="off">
+        <label class="field__label" for="query">Words to find</label>
+        <div class="searchfield">
+          <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+          <input id="query" name="q" type="search" placeholder="java thread" spellcheck="false">
+          <kbd class="searchfield__key" aria-hidden="true">/</kbd>
+          <button class="btn btn--solid" type="submit">Search</button>
+        </div>
+
+        <fieldset class="seg">
+          <legend class="sr-only">Match mode</legend>
+          <label><input type="radio" name="mode" value="all" checked><span>All words</span></label>
+          <label><input type="radio" name="mode" value="any"><span>Any word</span></label>
+        </fieldset>
+      </form>
+
+      <div class="results rise" style="--i: 2" id="results" aria-live="polite"></div>
+    </section>
+
+    <section class="panel rise" style="--i: 2" id="index-panel" aria-labelledby="index-title">
+      <h2 class="panel__title" id="index-title">Index</h2>
+      <form id="index-form" autocomplete="off">
+        <label class="field__label" for="folder-path">Folder path</label>
+        <input class="input" id="folder-path" type="text" spellcheck="false" placeholder="C:\Users\you\Documents\notes">
+        <button class="btn btn--line btn--block" id="index-btn" type="submit">Index folder</button>
+      </form>
+
+      <dl class="stats" id="stats" hidden>
+        <div><dt>Documents</dt><dd id="stat-docs">0</dd></div>
+        <div><dt>Unique words</dt><dd id="stat-terms">0</dd></div>
+      </dl>
+
+      <p class="panel__note" id="index-note" role="status">Nothing indexed yet.</p>
+      <p class="panel__note" id="mock-note" hidden>Demo mode: leave the path empty to use the sample files. The Java backend will replace this.</p>
+    </section>
+
+    <section class="history rise" style="--i: 3" aria-labelledby="history-title">
+      <div class="history__head">
+        <h2 class="panel__title" id="history-title">History</h2>
+        <button class="link-btn" id="history-clear" type="button" hidden>Clear</button>
+      </div>
+      <ul id="history-list"></ul>
+      <p class="panel__note" id="history-empty">Searches you run will be listed here.</p>
+    </section>
+  </main>
+</body>
+</html>
