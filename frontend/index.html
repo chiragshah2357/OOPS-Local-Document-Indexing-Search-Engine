@@ -56,6 +56,30 @@
         </fieldset>
       </form>
     </section>
+
+    <div class="layout">
+      <section aria-labelledby="results-title">
+        <div class="section-head">
+          <h2 class="section-title" id="results-title">Results</h2>
+          <p class="small muted" id="results-meta" aria-live="polite"></p>
+        </div>
+        <div id="results-list">
+          <div class="empty">
+            <p class="empty__title">Nothing to show yet</p>
+            <p class="empty__body">Index a folder, then search it. Results are ranked by how often your keywords appear in each document.</p>
+          </div>
+        </div>
+      </section>
+
+      <aside aria-labelledby="history-title">
+        <div class="section-head">
+          <h2 class="section-title" id="history-title">Search history</h2>
+          <button class="link-btn" id="history-clear" type="button" hidden>Clear</button>
+        </div>
+        <ul class="history" id="history-list"></ul>
+        <p class="small muted" id="history-empty">Your recent searches will appear here.</p>
+      </aside>
+    </div>
   </main>
 </body>
 </html>

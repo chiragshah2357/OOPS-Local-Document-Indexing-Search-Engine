@@ -255,3 +255,51 @@ button, input { font: inherit; color: inherit; }
   .row { flex-direction: column; }
   .row .btn { width: 100%; }
 }
+
+/* Results and history layout --------------------------------------------- */
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 32px;
+  align-items: start;
+}
+
+@media (max-width: 800px) {
+  .layout { grid-template-columns: 1fr; }
+}
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 24px;
+  margin-bottom: 12px;
+}
+
+.muted { color: var(--muted); }
+.small { font-size: 0.8125rem; }
+
+.link-btn {
+  padding: 0;
+  background: none;
+  border: 0;
+  font-size: 0.8125rem;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.link-btn:hover { text-decoration: underline; }
+.link-btn[hidden] { display: none; }
+
+.empty {
+  padding: 40px 24px;
+  text-align: center;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+}
+
+.empty__title { margin-bottom: 4px; font-weight: 600; }
+.empty__body { max-width: 44ch; margin-inline: auto; font-size: 0.9375rem; color: var(--muted); }
+
+.history { display: grid; gap: 2px; margin: 0 0 8px; padding: 0; list-style: none; }
