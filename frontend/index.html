@@ -28,6 +28,34 @@
   </header>
 
   <main class="container page" id="app">
+    <section class="panel" aria-labelledby="index-title">
+      <div class="panel__head">
+        <h2 class="section-title" id="index-title">Index</h2>
+        <p class="status" id="index-status" role="status">No folder indexed yet</p>
+      </div>
+      <form class="row" id="index-form" autocomplete="off">
+        <label class="sr-only" for="folder-path">Folder path</label>
+        <input class="input input--mono" id="folder-path" name="folder" type="text" spellcheck="false" placeholder="C:\Users\you\Documents\notes">
+        <button class="btn btn--secondary" id="index-btn" type="submit">Index folder</button>
+      </form>
+    </section>
+
+    <section aria-label="Search">
+      <form id="search-form" role="search" autocomplete="off">
+        <div class="searchbox">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <label class="sr-only" for="query">Search query</label>
+          <input class="searchbox__input" id="query" name="q" type="search" placeholder="Search your documents, e.g. java thread">
+          <button class="btn btn--primary" type="submit">Search</button>
+        </div>
+
+        <fieldset class="segmented">
+          <legend class="sr-only">Match mode</legend>
+          <label><input type="radio" name="mode" value="all" checked><span>Match all words</span></label>
+          <label><input type="radio" name="mode" value="any"><span>Match any word</span></label>
+        </fieldset>
+      </form>
+    </section>
   </main>
 </body>
 </html>
