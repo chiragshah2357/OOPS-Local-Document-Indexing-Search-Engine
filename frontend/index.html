@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>DocIndex: search a folder of text files</title>
+  <meta name="description" content="A local document indexing and search engine. Index a folder of text files once, then rank every match by keyword frequency. CSC2104 Object Oriented Programming mini project.">
+  <script>document.documentElement.classList.add("js");</script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/landing.css">
+</head>
+<body>
+  <header class="nav">
+    <div class="wrap nav__in">
+      <a class="brand" href="index.html" aria-label="DocIndex home">
+        <span class="brand__mark" aria-hidden="true"></span>DocIndex
+      </a>
+      <div class="who" aria-label="Student details">
+        <span class="who__name">Chirag Shah</span>
+        <span class="who__id">2503080249</span>
+        <span class="who__sec">Section T4</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="wrap">
+        <h1 class="hero__title rise">Find the right file by the <span class="hl">words</span> inside it.</h1>
+
+        <div class="hero__grid">
+          <div class="hero__copy">
+            <p class="hero__sub rise" style="--i: 1">Point it at a folder of text files. It builds an index once, then ranks every match by keyword frequency.</p>
+            <div class="hero__cta rise" style="--i: 2">
+              <a class="btn btn--solid" href="app.html">Open app <i class="ph ph-arrow-right" aria-hidden="true"></i></a>
+              <a class="btn btn--line" href="#how">See how it works</a>
+            </div>
+          </div>
+
+          <div class="demo rise" style="--i: 3">
+            <div class="demo__bar">
+              <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+              <input class="demo__input" id="demo-input" type="text" autocomplete="off" spellcheck="false" placeholder="Search the sample files" aria-label="Try a search on the sample files">
+              <button class="demo__mode" id="demo-mode" type="button" aria-label="Match mode, click to switch">any word</button>
+            </div>
+            <ul class="demo__list" id="demo-list" aria-live="polite"></ul>
+            <p class="demo__foot" id="demo-foot">Indexing the sample files</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="how">
+      <div class="wrap">
+        <div class="section__head reveal">
+          <h2 class="h2">From a folder to a ranked list</h2>
+          <p class="lede">Four steps, each one a plain Java collection. The samples follow one sentence through all of them.</p>
+        </div>
+
+        <ol class="flow">
+          <li class="flow__row reveal">
+            <h3 class="flow__verb">Read</h3>
+            <p class="flow__text">Walks the folder and loads every .txt file into a string.</p>
+            <div class="sample">
+              <p class="sample__label">threads-and-synchronization.txt</p>
+              <p>A thread is the smallest unit of execution in Java.</p>
+            </div>
+          </li>
+
+          <li class="flow__row reveal">
+            <h3 class="flow__verb">Split</h3>
+            <p class="flow__text">Lowercases the text, breaks it into words and drops filler like "the" and "is".</p>
+            <div class="sample">
+              <p class="tokens">
+                <span class="tok stop" style="--i: 0">a</span>
+                <span class="tok">thread</span>
+                <span class="tok stop" style="--i: 1">is</span>
+                <span class="tok stop" style="--i: 2">the</span>
+                <span class="tok">smallest</span>
+                <span class="tok">unit</span>
+                <span class="tok stop" style="--i: 3">of</span>
+                <span class="tok">execution</span>
+                <span class="tok stop" style="--i: 4">in</span>
+                <span class="tok">java</span>
+              </p>
+            </div>
+          </li>
+
+          <li class="flow__row reveal">
+            <h3 class="flow__verb">Index</h3>
+            <p class="flow__text">Records which files contain each word, and how many times it appears in each.</p>
+            <dl class="sample postings">
+              <dt>thread</dt>
+              <dd><span>threads-and-synchronization.txt</span><b>2</b></dd>
+              <dt>java</dt>
+              <dd><span>file-io-basics.txt</span><b>2</b></dd>
+              <dd><span>java-collections.txt</span><b>2</b></dd>
+              <dd><span>threads-and-synchronization.txt</span><b>1</b></dd>
+            </dl>
+          </li>
+
+          <li class="flow__row reveal">
+            <h3 class="flow__verb">Rank</h3>
+            <p class="flow__text">Looks up each query word, combines the file sets, and sorts by total hits.</p>
+            <div class="sample">
+              <p class="sample__label">java thread, any word</p>
+              <ul class="ranked">
+                <li><span>threads-and-synchronization.txt</span><b>3</b><i class="bar" style="--w: 1"></i></li>
+                <li><span>file-io-basics.txt</span><b>2</b><i class="bar" style="--w: 0.67"></i></li>
+                <li><span>java-collections.txt</span><b>2</b><i class="bar" style="--w: 0.67"></i></li>
+                <li><span>exception-handling.txt</span><b>1</b><i class="bar" style="--w: 0.33"></i></li>
+              </ul>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="section section--tight">
+      <div class="wrap">
+        <div class="section__head reveal">
+          <h2 class="h2">The Java behind it</h2>
+          <p class="lede">Each concept from the brief has one job in the engine.</p>
+        </div>
+
+        <div class="bento">
+          <article class="cell cell--a reveal">
+            <h3>HashMap</h3>
+            <p>The inverted index. Each word maps to the files containing it, with a count per file.</p>
+            <code class="code">Map&lt;String, Map&lt;Document, Integer&gt;&gt; index</code>
+          </article>
+
+          <article class="cell cell--b reveal" style="--i: 1">
+            <h3>HashSet</h3>
+            <p>Holds the stop words, and gives match-all and match-any through intersection and union.</p>
+          </article>
+
+          <article class="cell cell--c reveal">
+            <h3>PriorityQueue</h3>
+            <p>Keeps the best-scoring files on top, ordered by a Comparator.</p>
+          </article>
+
+          <article class="cell cell--d reveal" style="--i: 1">
+            <h3>File I/O and Strings</h3>
+            <p>Walks the folder, reads each file and cuts the text into lowercase words.</p>
+          </article>
+
+          <article class="cell cell--e reveal">
+            <div>
+              <h3>Collections</h3>
+              <p>A bounded Deque keeps the last ten searches, newest first.</p>
+            </div>
+            <a class="btn btn--line" href="app.html">Open app <i class="ph ph-arrow-right" aria-hidden="true"></i></a>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap foot__in">
+      <p>CSC2104 Object Oriented Programming, mini project.</p>
+      <a class="link" href="https://github.com/chiragshah2357/OOPS-Local-Document-Indexing-Search-Engine" rel="noopener">View source <i class="ph ph-arrow-up-right" aria-hidden="true"></i></a>
+    </div>
+  </footer>
+</body>
+</html>
