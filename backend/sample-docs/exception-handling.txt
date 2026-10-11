@@ -1,0 +1,1 @@
+An exception is an event that interrupts the normal flow of a Java program. Use try, catch and finally to handle it. Checked exceptions such as IOException must be handled or declared, while unchecked exceptions come from programming mistakes. A custom exception class makes errors easier to understand.

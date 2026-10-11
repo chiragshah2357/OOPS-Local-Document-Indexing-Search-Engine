@@ -1,0 +1,1 @@
+A search engine builds an inverted index that maps every word to the documents containing it. To answer a query it looks up each word, combines the matching documents, and ranks them by keyword frequency. Searching an index is much faster than reading every file again, because each word is a single HashMap lookup.

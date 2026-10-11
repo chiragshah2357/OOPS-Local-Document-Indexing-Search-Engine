@@ -1,0 +1,1 @@
+The Java Collections Framework provides ready made data structures. A HashMap stores key value pairs and gives constant time lookup on average, while a HashSet stores unique elements and is backed by a HashMap. An ArrayList grows dynamically, and a PriorityQueue always returns the smallest element first. Choosing the right collection decides how fast a Java program runs.
