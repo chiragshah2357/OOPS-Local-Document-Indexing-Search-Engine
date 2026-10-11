@@ -1,0 +1,1 @@
+File I/O in Java reads and writes data using streams. A BufferedReader reads a text file line by line, and a FileWriter writes text back to disk. Always close a file after use, or let try with resources do it for you. A Java program can walk a whole folder and read every file inside it.

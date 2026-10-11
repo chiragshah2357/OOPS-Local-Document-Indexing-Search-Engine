@@ -1,0 +1,1 @@
+A thread is the smallest unit of execution in Java. Multithreading lets a program do several things at once, but threads that share data need synchronization to avoid race conditions. Use the synchronized keyword or a ReentrantLock so only one thread changes the shared balance at a time. A deadlock happens when two threads wait on each other forever.

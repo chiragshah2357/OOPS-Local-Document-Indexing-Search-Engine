@@ -1,0 +1,1 @@
+Object oriented programming is built on four ideas: encapsulation, inheritance, polymorphism and abstraction. Encapsulation hides data inside a class. Inheritance lets a class reuse another class. Polymorphism lets one interface have many forms, and abstraction hides the details behind a simple interface.
