@@ -3,6 +3,7 @@ package docsearch;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -31,6 +32,7 @@ public class SelfTest {
         testSnippet();
         testHistory();
         testSearchEngine();
+        testJson();
 
         System.out.println();
         System.out.println(passed + " passed, " + failed + " failed");
@@ -261,6 +263,45 @@ public class SelfTest {
         check("the newest search is first in the history", engine.getHistory().get(0).getQuery().equals("java zebra"));
         engine.clearHistory();
         check("the engine can clear its history", engine.getHistory().isEmpty());
+    }
+
+    private static void testJson() throws IOException {
+        check("quote escapes quotes, backslashes and line breaks",
+                Json.quote("say \"hi\"\nC:\\notes").equals("\"say \\\"hi\\\"\\nC:\\\\notes\""));
+        check("quote escapes other control characters", Json.quote("a\u0001b").equals("\"a\\u0001b\""));
+        check("error has a message and a code",
+                Json.error("Not a folder", "BAD_PATH").equals("{\"error\":\"Not a folder\",\"code\":\"BAD_PATH\"}"));
+        check("index stats use the field names the frontend expects",
+                Json.indexStats(new IndexStats("sample-docs", 6, 169, 5, 0)).equals(
+                        "{\"path\":\"sample-docs\",\"documents\":6,\"terms\":169,\"tookMs\":5,\"skipped\":0}"));
+
+        List<HistoryEntry> entries = Arrays.asList(new HistoryEntry("java", "all", 123L), new HistoryEntry("a \"b\"", "any", 456L));
+        check("history is a list of query, mode and time",
+                Json.history(entries).equals("[{\"query\":\"java\",\"mode\":\"all\",\"at\":123},{\"query\":\"a \\\"b\\\"\",\"mode\":\"any\",\"at\":456}]"));
+        check("an empty history is an empty list", Json.history(new ArrayList<HistoryEntry>()).equals("[]"));
+
+        check("readString reads a plain value", Json.readString("{\"path\":\"sample-docs\"}", "path").equals("sample-docs"));
+        check("readString unescapes Windows paths",
+                Json.readString("{\"path\":\"C:\\\\notes\\\\docs\"}", "path").equals("C:\\notes\\docs"));
+        check("readString ignores spaces around the colon", Json.readString("{ \"path\" :  \"x\" }", "path").equals("x"));
+        check("readString gives null for a missing field", Json.readString("{\"other\":\"x\"}", "path") == null);
+        check("readString gives null when the value is not text", Json.readString("{\"path\":5}", "path") == null);
+        check("readString gives null when the closing quote is missing", Json.readString("{\"path\":\"abc", "path") == null);
+
+        SearchEngine engine = new SearchEngine();
+        engine.indexFolder("sample-docs");
+        String json;
+        try {
+            json = Json.searchResponse(engine.search("java thread", "any"));
+        } catch (IndexNotReadyException e) {
+            json = "";
+        }
+        check("a search response starts with the query, mode, words and total",
+                json.startsWith("{\"query\":\"java thread\",\"mode\":\"any\",\"terms\":[\"java\",\"thread\"],\"total\":4,\"tookMs\":"));
+        check("a search response lists each result with its score and word counts",
+                json.contains("\"title\":\"threads-and-synchronization.txt\"") && json.contains("\"score\":3")
+                        && json.contains("\"matches\":{\"java\":1,\"thread\":2}"));
+        check("paths in a search response use forward slashes", json.contains("\"path\":\"sample-docs/threads-and-synchronization.txt\""));
     }
 
     // The scores of a response as text, for example [3, 2, 2, 1].
