@@ -1,5 +1,6 @@
 package docsearch;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Date;
 import java.util.List;
@@ -7,16 +8,58 @@ import java.util.Map;
 import java.util.Scanner;
 
 /**
- * A console menu for the search engine: index a folder, search it, look at the history.
+ * The starting point of the program. It can run in two ways:
  *
- * Start it with run.bat.
+ *   run.bat    a console menu: index a folder, search it, look at the history
+ *   serve.bat  a web server, so the browser frontend can use the engine
+ *
+ * Both use the same SearchEngine. The word "web" as the first argument
+ * chooses the web server; anything else starts the console menu.
  */
 public class Main {
 
     private static final String SAMPLE_FOLDER = "sample-docs";
+    private static final int DEFAULT_PORT = 8080;
+    private static final String DEFAULT_FRONTEND = "../frontend";
 
     public static void main(String[] args) {
-        runConsole();
+        if (args.length > 0 && args[0].equalsIgnoreCase("web")) {
+            runWebServer(args);
+        } else {
+            runConsole();
+        }
+    }
+
+    // Usage: web [port] [frontend folder]
+    private static void runWebServer(String[] args) {
+        int port = DEFAULT_PORT;
+        if (args.length > 1) {
+            try {
+                port = Integer.parseInt(args[1]);
+            } catch (NumberFormatException e) {
+                System.out.println("The port must be a number, for example 8080.");
+                return;
+            }
+        }
+
+        File webRoot = new File(args.length > 2 ? args[2] : DEFAULT_FRONTEND);
+        if (!webRoot.isDirectory()) {
+            System.out.println("Could not find the frontend folder: " + webRoot.getAbsolutePath());
+            System.out.println("Start the server from the backend folder (serve.bat does this), or give the frontend folder as the third argument.");
+            return;
+        }
+
+        WebServer server = new WebServer(new SearchEngine(), webRoot);
+        try {
+            server.start(port);
+        } catch (IOException e) {
+            System.out.println("Could not start the server on port " + port + ": " + e.getMessage());
+            System.out.println("Another program may be using that port. Try a different one, for example: serve.bat 9000");
+            return;
+        }
+
+        System.out.println("DocSearch is running at http://localhost:" + port);
+        System.out.println("Open that address in your browser. Press Ctrl+C to stop.");
     }
 
     private static void runConsole() {

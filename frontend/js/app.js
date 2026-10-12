@@ -47,19 +47,20 @@
     );
   }
 
-  // Demo mode only: a one-click way to index the bundled files.
+  // A one-click way to index the sample documents: the copy built into the page in demo mode,
+  // or the sample-docs folder next to the Java backend.
   const sampleButton = () =>
-    Api.isMock ? '<button class="btn btn--line" type="button" data-action="sample">Use the sample files</button>' : "";
+    '<button class="btn btn--line" type="button" data-action="sample">' +
+    (Api.isMock ? "Use the sample files" : "Use the sample-docs folder") + "</button>";
 
   function showIntro() {
     if (!indexed) {
-      const button = sampleButton();
       els.results.innerHTML = state(
         "Index a folder to begin",
         Api.isMock
           ? "Index the bundled sample files, then search them. Matches are ranked by how often your words appear."
-          : "Enter a folder path on the right and index it. Matches are ranked by how often your words appear.",
-        button
+          : "Type the path of a folder on the right and index it, or try the sample-docs folder. Matches are ranked by how often your words appear.",
+        sampleButton()
       );
       return;
     }
@@ -129,12 +130,16 @@
   }
 
   /* ---- Actions ------------------------------------------------------------ */
-  async function runIndex() {
+  // The sample button passes its own path. The form passes nothing, so the text box is used.
+  async function runIndex(path) {
+    const target = typeof path === "string" ? path : els.folder.value.trim();
+    if (target) els.folder.value = target;
+
     els.panel.classList.add("busy");
     els.indexBtn.disabled = true;
     els.indexNote.textContent = "Indexing…";
     try {
-      const info = await Api.indexFolder(els.folder.value.trim());
+      const info = await Api.indexFolder(target);
       indexed = true;
       els.stats.hidden = false;
       countUp(els.statDocs, info.documents, 700);
@@ -197,7 +202,7 @@
   // Intro buttons and suggestion chips are rendered dynamically, so listen on the container.
   els.results.addEventListener("click", (e) => {
     const sample = e.target.closest("[data-action='sample']");
-    if (sample) { runIndex(); return; }
+    if (sample) { runIndex(Api.sampleFolder); return; }
     const chip = e.target.closest("[data-q]");
     if (chip) runWith(chip.dataset.q, chip.dataset.mode);
   });
@@ -220,7 +225,11 @@
     els.query.focus();
   });
 
-  els.mockNote.hidden = !Api.isMock;
-  showIntro();
-  renderHistory();
+  // Wait until the API knows whether the Java backend is running, then draw the first screen.
+  Api.ready.then(() => {
+    els.mockNote.hidden = !Api.isMock;
+    if (!Api.isMock) els.indexNote.textContent = "Java engine connected. Nothing indexed yet.";
+    showIntro();
+    renderHistory();
+  });
 })();
