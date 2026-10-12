@@ -1,24 +1,29 @@
 /*
  * API layer: the only file that knows where data comes from.
  *
- * The UI calls window.Api.* and never touches fetch() or the mock directly.
- * Right now USE_MOCK is true, so everything is answered in the browser from
- * the sample documents in mock-data.js. When the Java backend is ready, set
- * USE_MOCK to false and the same calls go to the /api endpoints documented in
- * frontend/README.md. No other file needs to change.
+ * The UI calls window.Api.* and never touches fetch() or the demo engine
+ * directly. Api works out by itself where its answers come from:
+ *
+ *   - Backend mode: the page is being served by the Java backend, which
+ *     answers GET /api/health. Requests go to the /api endpoints described
+ *     in frontend/README.md and search the folders on your computer.
+ *   - Demo mode: anything else (a static host such as Vercel, a plain file
+ *     server, a file opened from disk). Answers come from the sample
+ *     documents in mock-data.js, computed inside the browser.
  *
  * Every function returns a Promise and rejects with an Error that may carry a
- * `code` (for example "NOT_INDEXED").
+ * `code` (for example "NOT_INDEXED"). Wait for Api.ready before reading
+ * Api.isMock or Api.sampleFolder, because the mode is found by asking the server.
  */
 (function () {
   "use strict";
 
-  const USE_MOCK = true;
   const API_BASE = "/api";
+  const FORCE_MODE = null; // "demo" or "backend" skips the check; leave null to detect it
 
-  /* ---- Mock implementation ------------------------------------------------
-   * A tiny stand-in for the Java engine so the UI can be demonstrated today.
-   * It is intentionally simple and is deleted once USE_MOCK goes away.
+  /* ---- Demo implementation -------------------------------------------------
+   * A tiny stand-in for the Java engine. It lets the whole UI work without
+   * a server, and it is what runs when the site is hosted as plain static files.
    */
   const HISTORY_KEY = "lds.history";
   const HISTORY_LIMIT = 10;
@@ -152,9 +157,59 @@
     clearHistory: () => http("DELETE", "/history")
   };
 
-  window.Api = Object.assign({ isMock: USE_MOCK }, USE_MOCK ? mock : remote);
+  /* ---- Choosing between them ----------------------------------------------- */
+  let backend = false; // true once the Java backend has answered /api/health
+  let readyPromise = null;
 
-  // The landing page always demos against the bundled sample files, even after
-  // the app is switched over to the Java backend.
+  // The Java backend only listens on this computer, so on any other address (a Vercel site, for example)
+  // there is no backend to look for, and we skip the request.
+  const LOCAL_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
+
+  async function detect() {
+    if (FORCE_MODE) {
+      backend = FORCE_MODE === "backend";
+      return;
+    }
+    if (LOCAL_HOSTS.indexOf(location.hostname) === -1) {
+      backend = false;
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2500);
+    try {
+      const res = await fetch(API_BASE + "/health", { cache: "no-store", signal: controller.signal });
+      const info = await res.json(); // a static host answers 404 or HTML, which fails here
+      backend = res.ok && info.ok === true;
+    } catch (e) {
+      backend = false;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // The check runs the first time something asks for it, so the landing page, which never uses Api, makes no request.
+  function ensureReady() {
+    if (!readyPromise) readyPromise = detect();
+    return readyPromise;
+  }
+
+  async function engine() {
+    await ensureReady();
+    return backend ? remote : mock;
+  }
+
+  window.Api = {
+    get ready() { return ensureReady(); },
+    get isMock() { return !backend; },
+    // What the "use the sample files" button should index. The Java backend reads real folders, so it needs a path.
+    get sampleFolder() { return backend ? "sample-docs" : ""; },
+    indexFolder: async (path) => (await engine()).indexFolder(path),
+    search: async (query, mode) => (await engine()).search(query, mode),
+    history: async () => (await engine()).history(),
+    clearHistory: async () => (await engine()).clearHistory()
+  };
+
+  // The landing page always demos against the bundled sample files, even when
+  // the Java backend is running.
   window.DemoApi = mock;
 })();

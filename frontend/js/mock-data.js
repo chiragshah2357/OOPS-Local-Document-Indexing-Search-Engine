@@ -1,9 +1,10 @@
 /*
  * Demo documents.
  *
- * Used only while the frontend runs in mock mode (see USE_MOCK in api.js),
- * so the UI can be tried before the Java backend exists. Once the backend is
- * connected, the real documents come from the folder the user indexes.
+ * Used when the frontend runs in demo mode (see api.js): on a static host
+ * such as Vercel, or whenever the Java backend is not running. With the
+ * backend connected, documents come from the folder the user indexes. The
+ * texts are the same as the files in backend/sample-docs.
  */
 window.MOCK_DOCS = [
   {
