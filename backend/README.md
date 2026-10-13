@@ -1,6 +1,6 @@
 # Backend (Java)
 
-The search engine itself, written in plain Java with no libraries and no build tool. It reads a folder of text files, builds an index, and answers searches with ranked results.
+The search engine itself, written in plain Java with no libraries and no build tool. It reads a folder of text files, builds an index, and answers searches with ranked results. The diagrams of how the classes fit together are in the [main README](../README.md#class-design).
 
 ## Build, test and run
 
@@ -22,30 +22,21 @@ To use an IDE instead, open the `backend` folder in IntelliJ and mark `src` as t
 ```
 1. Index a folder
 2. Search
-3. Show search history
-4. Clear search history
-5. Exit
+3. Show the most frequent words
+4. Show search history
+5. Clear search history
+6. Exit
 ```
 
-Choose 1 and press Enter to index the `sample-docs` folder, then choose 2 and type some words. You can ask for files that contain **all** the words or **any** of them.
+Choose 1 and press Enter to index the `sample-docs` folder, then choose 2 and type some words. You can ask for files that contain **all** the words or **any** of them. Option 3 lists the words that appear most often across all the files:
 
-## The web server
-
-`serve.bat` starts a small web server and prints `DocSearch is running at http://localhost:8080`. Open that address and you get the website, backed by this engine, which can index any folder on your computer. Use `serve.bat 9000` to pick another port.
-
-The server is the postman between the browser and the engine. The browser sends a request, `WebServer` passes it to `SearchEngine`, and the answer goes back as JSON:
-
-| Request | What it does |
-|---|---|
-| `GET /api/health` | Says the engine is running. The frontend uses it to find the backend. |
-| `POST /api/index` | Indexes the folder named in the request |
-| `GET /api/search?q=java+thread&mode=any` | Searches, with `mode` set to `all` or `any` |
-| `GET /api/history` | Returns the last 10 searches |
-| `DELETE /api/history` | Clears the history |
-
-Any other address returns a file from the `frontend` folder. Each answer's exact shape and the error codes are listed in [frontend/README.md](../frontend/README.md).
-
-`WebServer` uses the `HttpServer` that comes with Java, so there is still nothing to install. It is the one part of the project outside the course topics, and it only passes messages along: all the searching is done by the classes above. Two safety choices are built in. It listens on `127.0.0.1`, so only your own computer can connect, and it refuses any file address that would leave the `frontend` folder.
+```
+The 10 most frequent words:
+1. java   6 times in 4 file(s)
+2. file   5 times in 2 file(s)
+3. class   4 times in 2 file(s)
+...
+```
 
 ## How a search works
 
@@ -56,6 +47,62 @@ Any other address returns a file from the `frontend` folder. Each answer's exact
 5. **Rank:** results go into a `PriorityQueue` that always hands back the best one first. Equal scores are ordered by file name.
 6. **Remember:** the search is added to the history, which keeps the last 10.
 
+**Keyword frequency** across the whole index works the same way: `InvertedIndex.topWords` adds up each word's counts, wraps each word in a `WordCount`, and a `PriorityQueue` hands back the most frequent first.
+
+### Reading a folder: recursion
+
+`DocumentLoader.collect` handles one folder. When it meets a sub folder, it calls itself for that folder, so folders of any depth are read.
+
+```mermaid
+flowchart TD
+    start["collect(folder)"] --> list["folder.listFiles(), sorted by name"]
+    list --> item{"Next item?"}
+    item -->|a sub folder| self["collect(sub folder)<br/>the method calls itself"]
+    self --> item
+    item -->|a .txt file| read["read it line by line<br/>with a BufferedReader"]
+    read -->|read| doc["new Document(id, name, path, text)"]
+    read -->|IOException| skip["remember it as skipped"]
+    doc --> item
+    skip --> item
+    item -->|another kind of file| item
+    item -->|no more items| done(["back to the caller"])
+```
+
+The reader is closed in a `finally` block, so a file is closed even when reading it fails.
+
+## The web server
+
+`serve.bat` starts a small web server and prints `DocSearch is running at http://localhost:8080`. Open that address and you get the website, backed by this engine, which can index any folder on your computer. Use `serve.bat 9000` to pick another port.
+
+The server is the postman between the browser and the engine. The browser sends a request, `WebServer` passes it to `SearchEngine`, and `Json` writes the answer:
+
+```mermaid
+flowchart TD
+    req["Request from the browser"] --> api{"Does the address<br/>start with /api/?"}
+    api -->|yes| handler["ApiHandler picks the action:<br/>health, index, search, words, document, history"]
+    handler --> engine["SearchEngine does the work"]
+    engine --> json["Json writes the answer"]
+    json --> reply(["JSON response"])
+    api -->|no| files["FileHandler"]
+    files --> inside{"Is the file inside<br/>the frontend folder?"}
+    inside -->|yes| send(["the file, for example app.html"])
+    inside -->|no| missing(["404 Not found"])
+```
+
+| Request | What it does |
+|---|---|
+| `GET /api/health` | Says the engine is running, and what is indexed. The frontend uses it to find the backend. |
+| `POST /api/index` | Indexes the folder named in the request |
+| `GET /api/search?q=java+thread&mode=any` | Searches, with `mode` set to `all` or `any` |
+| `GET /api/words?limit=10` | The most frequent words in the index |
+| `GET /api/document?id=6` | One whole document, so the website can show it with the matches highlighted |
+| `GET /api/history` | Returns the last 10 searches |
+| `DELETE /api/history` | Clears the history |
+
+Any other address returns a file from the `frontend` folder. Each answer's exact shape and the error codes are listed in [frontend/README.md](../frontend/README.md#api).
+
+`WebServer` uses the `HttpServer` that comes with Java, so there is still nothing to install. It is the one part of the project outside the course topics, and it only passes messages along: all the searching is done by the classes below. Two safety choices are built in. It listens on `127.0.0.1`, so only your own computer can connect, and it refuses any file address that would leave the `frontend` folder.
+
 ## The classes
 
 All classes are in the package `docsearch`.
@@ -65,11 +112,12 @@ All classes are in the package `docsearch`.
 | `Document` | One text file: id, name, path and text | Encapsulation (private fields, getters) |
 | `Tokenizer` | Lowercases text, splits it into words, drops filler words like "the" | Strings, `HashSet` |
 | `DocumentLoader` | Reads every `.txt` file in a folder and its sub folders | File I/O, recursion, try/finally |
-| `InvertedIndex` | Maps each word to the documents containing it and how many times | `HashMap` |
+| `InvertedIndex` | Maps each word to the documents containing it and how many times, and finds the most frequent words | `HashMap`, `PriorityQueue` |
 | `Matcher`, `AllWordsMatcher`, `AnyWordMatcher` | Combine the document sets of the search words | Abstract class, inheritance, polymorphism, `HashSet` |
 | `SearchResult` | One result row. It can compare itself with another by score | `Comparable` |
+| `WordCount` | One word's total count across the index. It compares by total | `Comparable` |
 | `SnippetBuilder` | Cuts a short piece of text around the first match | Strings |
-| `SearchEngine` | Indexes a folder, runs a search and ranks the results | `PriorityQueue`, Collections |
+| `SearchEngine` | Indexes a folder, runs a search, ranks the results, gives the top words | `PriorityQueue`, Collections |
 | `SearchHistory`, `HistoryEntry` | Remember the last 10 searches, newest first | `LinkedList` |
 | `IndexNotReadyException` | Raised if you search before indexing | Custom exception |
 | `IndexStats`, `SearchResponse` | Small classes that carry answers back to the caller | Encapsulation |
@@ -80,8 +128,8 @@ All classes are in the package `docsearch`.
 
 ## Sample documents
 
-`sample-docs/` holds six short files. They are the same texts the frontend demo uses, so the real engine and the demo give the same answers. For example, searching `java thread` for **any** word returns four files with scores 3, 2, 2 and 1. The self test checks this.
+`sample-docs/` holds six short files. They are the same texts the website uses in browser mode, so the Java engine and the browser engine give the same answers. For example, searching `java thread` for **any** word returns four files with scores 3, 2, 2 and 1, and the most frequent word is `java`, 6 times in 4 files. The self test checks this.
 
 ## Tests
 
-`test.bat` runs 74 checks: the tokenizer, the loader, the index, both matchers, ranking, snippets, history, the engine end to end, and the JSON the web server sends. The web server itself was checked by hand against every address, including error cases and attempts to read files outside the frontend folder.
+`test.bat` runs 88 checks: the tokenizer, the loader, the index and its top words, both matchers, ranking of results and of word counts, snippets, history, the engine end to end, and the JSON the web server sends. The web server itself was checked by hand against every address, including error cases and attempts to read files outside the frontend folder.
