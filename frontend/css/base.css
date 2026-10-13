@@ -1,17 +1,18 @@
 /* ==========================================================================
-   DocIndex: shared foundation (tokens, type, nav, buttons, motion rules)
+   DocIndex: shared foundation (tokens, type, nav, buttons, footer, motion)
 
    Design rules used across both pages
    - One accent: highlighter lime (--hl). It only ever fills a background
      behind dark text, the same way a highlighter pen works.
    - One radius scale: 6px for controls and panels, 3px for small inline bits.
+   - Light theme only.
    - Motion only animates transform and opacity, and is switched off under
      prefers-reduced-motion.
    ========================================================================== */
 
 /* Tokens ------------------------------------------------------------------ */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
 
   --bg: #f4f4f5;
   --surface: #ffffff;
@@ -28,25 +29,10 @@
 
   --r: 6px;
   --r-sm: 3px;
-  --font: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --mono: "Geist Mono", ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  --font: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace;
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
   --shadow: 0 1px 2px rgb(15 16 18 / 0.05), 0 18px 40px -18px rgb(15 16 18 / 0.22);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0d0e10;
-    --surface: #15161a;
-    --surface-2: #1c1d22;
-    --line: #26282e;
-    --text: #ededeb;
-    --muted: #9a9ea7;
-    --ink: #ededeb;
-    --on-ink: #0d0e10;
-    --danger: #ff8f85;
-    --shadow: 0 1px 2px rgb(0 0 0 / 0.45), 0 20px 44px -20px rgb(0 0 0 / 0.8);
-  }
 }
 
 /* Reset ------------------------------------------------------------------- */
@@ -62,11 +48,12 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-h1, h2, h3, p, ul, ol, figure { margin: 0; }
+h1, h2, h3, p, ul, ol, dl, figure { margin: 0; }
 ul, ol { padding: 0; list-style: none; }
 button, input { font: inherit; color: inherit; }
 a { color: inherit; }
 :focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+[hidden] { display: none !important; }
 
 .wrap { width: min(100% - 48px, 1200px); margin-inline: auto; }
 
@@ -80,6 +67,18 @@ a { color: inherit; }
   clip: rect(0 0 0 0);
   white-space: nowrap;
   border: 0;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: var(--r-sm);
+  font: 0.75rem/1.5 var(--mono);
+  color: var(--muted);
+  text-align: center;
 }
 
 /* Icons (Phosphor web font) ----------------------------------------------- */
@@ -100,8 +99,8 @@ a { color: inherit; }
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  font-weight: 650;
-  letter-spacing: -0.02em;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   text-decoration: none;
 }
 
@@ -128,6 +127,27 @@ a { color: inherit; }
 .who__id, .who__sec { color: var(--muted); }
 .who__id { font-family: var(--mono); font-size: 0.8125rem; }
 .who__id, .who__sec { padding-left: 14px; border-left: 1px solid var(--line); }
+
+/* Square icon button, used by the document viewer. */
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s, transform 0.15s var(--ease);
+}
+
+.icon-btn .ph { font-size: 1.125rem; }
+.icon-btn:hover { border-color: var(--text); }
+.icon-btn:active { transform: scale(0.94); }
+.icon-btn:disabled { opacity: 0.4; cursor: default; }
+.icon-btn:disabled:hover { border-color: var(--line); }
 
 @media (max-width: 640px) {
   .wrap { width: min(100% - 32px, 1200px); }
@@ -167,6 +187,8 @@ a { color: inherit; }
 .btn--line { background: transparent; color: var(--text); border-color: var(--line); }
 .btn--line:hover:not(:disabled) { border-color: var(--text); }
 
+.btn--sm { height: 36px; padding: 0 12px; font-size: 0.875rem; }
+
 .link {
   color: var(--text);
   text-decoration: underline;
@@ -176,6 +198,9 @@ a { color: inherit; }
 }
 
 .link:hover { text-decoration-color: var(--text); }
+.link .ph { transition: transform 0.3s var(--ease); }
+.link:hover .ph-arrow-right { transform: translateX(3px); }
+.link:hover .ph-arrow-up-right { transform: translate(2px, -2px); }
 
 /* Highlighter marks ------------------------------------------------------- */
 mark {
@@ -198,6 +223,22 @@ mark {
   animation-delay: calc(var(--i, 0) * 70ms + 150ms);
 }
 
+/* Footer ------------------------------------------------------------------ */
+.foot { border-top: 1px solid var(--line); }
+
+.foot__in {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding-block: 28px;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.foot__links { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+
 /* Motion ------------------------------------------------------------------ */
 @keyframes rise {
   from { opacity: 0; transform: translateY(14px); }
@@ -208,6 +249,8 @@ mark {
   from { transform: scaleX(0); }
   to { transform: scaleX(var(--w, 1)); }
 }
+
+@keyframes sweep { to { transform: scaleX(1); } }
 
 .rise {
   animation: rise 0.8s var(--ease) both;
@@ -224,7 +267,7 @@ mark {
 
 .js .reveal.in { opacity: 1; transform: none; }
 
-/* Soft cross-fade between landing and app (supported browsers only). */
+/* Soft cross-fade between the landing page and the app (supported browsers only). */
 @view-transition { navigation: auto; }
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.25s; }
 

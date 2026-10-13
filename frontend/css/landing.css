@@ -9,8 +9,8 @@
   max-width: 17ch;
   font-size: clamp(2.5rem, 6.2vw, 4.75rem);
   font-weight: 600;
-  line-height: 1.03;
-  letter-spacing: -0.04em;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
   text-wrap: balance;
 }
 
@@ -34,8 +34,6 @@
   transform-origin: left center;
   animation: sweep 0.9s var(--ease) 0.7s forwards;
 }
-
-@keyframes sweep { to { transform: scaleX(1); } }
 
 .hero__grid {
   display: grid;
@@ -137,11 +135,30 @@
 .demo__empty { padding: 28px 16px; color: var(--muted); font-size: 0.9375rem; }
 
 .demo__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 16px;
   padding: 11px 16px;
   border-top: 1px solid var(--line);
   font: 0.75rem/1.4 var(--mono);
   color: var(--muted);
 }
+
+.demo__open { flex: none; font: 600 0.8125rem/1.4 var(--font); }
+
+/* The four features from the brief ---------------------------------------- */
+.features__list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-block: 1px solid var(--line);
+}
+
+.feature { padding: 28px 24px 30px 0; }
+.feature + .feature { padding-left: 24px; border-left: 1px solid var(--line); }
+.feature h2 { font-size: 1rem; font-weight: 600; }
+.feature p { margin-top: 6px; max-width: 30ch; font-size: 0.9375rem; color: var(--muted); }
 
 /* Sections ---------------------------------------------------------------- */
 .section { padding: 104px 0 24px; }
@@ -152,8 +169,8 @@
 .h2 {
   font-size: clamp(1.75rem, 3.4vw, 2.5rem);
   font-weight: 600;
-  line-height: 1.1;
-  letter-spacing: -0.03em;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
 }
 
 .lede { margin-top: 14px; max-width: 46ch; color: var(--muted); }
@@ -172,8 +189,8 @@
 .flow__verb {
   font-size: clamp(1.75rem, 3vw, 2.25rem);
   font-weight: 600;
-  line-height: 1;
-  letter-spacing: -0.035em;
+  line-height: 1.1;
+  letter-spacing: -0.015em;
 }
 
 .flow__text { max-width: 36ch; color: var(--muted); }
@@ -276,27 +293,20 @@
   font: 0.8125rem/1.4 var(--mono);
 }
 
-/* Footer ------------------------------------------------------------------ */
-.foot { border-top: 1px solid var(--line); }
-
-.foot__in {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px 24px;
-  padding-block: 28px;
-  font-size: 0.875rem;
-  color: var(--muted);
-}
-
-.foot .link { color: var(--text); }
-
 /* Responsive -------------------------------------------------------------- */
 @media (max-width: 900px) {
   .hero__grid { grid-template-columns: 1fr; margin-top: 36px; }
   .flow__row { grid-template-columns: 1fr; gap: 14px; padding: 28px 0; }
   .flow__text { max-width: none; }
+  .features__list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .feature:nth-child(3) { padding-left: 0; border-left: 0; }
+  .feature:nth-child(n + 3) { border-top: 1px solid var(--line); }
+}
+
+@media (max-width: 520px) {
+  .features__list { grid-template-columns: 1fr; }
+  .feature, .feature + .feature { padding: 22px 0; border-left: 0; }
+  .feature + .feature { border-top: 1px solid var(--line); }
 }
 
 @media (max-width: 720px) {

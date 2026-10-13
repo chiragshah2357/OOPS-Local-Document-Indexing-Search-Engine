@@ -1,44 +1,40 @@
 /*
- * API layer: the only file that knows where data comes from.
+ * API layer: the only file that knows where answers come from.
  *
- * The UI calls window.Api.* and never touches fetch() or the demo engine
- * directly. Api works out by itself where its answers come from:
+ * The app calls window.Api.* and never touches fetch() or the engine
+ * directly. Api works out by itself which of two engines answers:
  *
- *   - Backend mode: the page is being served by the Java backend, which
- *     answers GET /api/health. Requests go to the /api endpoints described
- *     in frontend/README.md and search the folders on your computer.
- *   - Demo mode: anything else (a static host such as Vercel, a plain file
- *     server, a file opened from disk). Answers come from the sample
- *     documents in mock-data.js, computed inside the browser.
+ *   - Java mode: the page was served by the Java backend (backend\serve.bat),
+ *     which answers GET /api/health. Requests go to the /api endpoints listed
+ *     in frontend/README.md, and folders are indexed by their path on disk.
+ *   - Browser mode: anything else (Vercel, a plain file server). The browser
+ *     engine in engine.js indexes the sample files, or files the visitor
+ *     picks, inside the tab. Nothing is uploaded.
  *
- * Every function returns a Promise and rejects with an Error that may carry a
- * `code` (for example "NOT_INDEXED"). Wait for Api.ready before reading
- * Api.isMock or Api.sampleFolder, because the mode is found by asking the server.
+ * Every function returns a Promise. Failures reject with an Error that may
+ * carry a `code`, for example "NOT_INDEXED". Wait for Api.ready before
+ * reading Api.mode.
  */
 (function () {
   "use strict";
 
   const API_BASE = "/api";
-  const FORCE_MODE = null; // "demo" or "backend" skips the check; leave null to detect it
+  const FORCE_MODE = null; // "browser" or "java" skips the check; leave null to detect it
 
-  /* ---- Demo implementation -------------------------------------------------
-   * A tiny stand-in for the Java engine. It lets the whole UI work without
-   * a server, and it is what runs when the site is hosted as plain static files.
-   */
   const HISTORY_KEY = "lds.history";
   const HISTORY_LIMIT = 10;
-  const STOP_WORDS = new Set([
-    "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "from", "if", "in",
-    "into", "is", "it", "of", "on", "or", "so", "that", "the", "then", "to", "was", "with"
-  ]);
+  const SAMPLE_FOLDER = "sample-docs"; // the folder next to the Java backend
+  const SAMPLE_LABEL = "the sample files";
 
-  let index = null; // Map<term, Map<docId, count>> (an inverted index)
-
-  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-  function tokenize(text) {
-    return (text.toLowerCase().match(/[a-z0-9]+/g) || []).filter((word) => !STOP_WORDS.has(word));
+  function fail(message, code) {
+    const err = new Error(message);
+    err.code = code;
+    return err;
   }
+
+  /* ---- Browser mode --------------------------------------------------------- */
+  const local = Engine.create();
+  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   function loadHistory() {
     try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch (e) { return []; }
@@ -48,92 +44,47 @@
     try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list)); } catch (e) { /* storage unavailable */ }
   }
 
-  // A short excerpt around the first matching word, cut on word boundaries.
-  function makeSnippet(text, terms) {
-    const hit = new RegExp("\\b(?:" + terms.join("|") + ")\\b", "i").exec(text);
-    const at = hit ? hit.index : 0;
-    const start = Math.max(0, at - 70);
-    const end = Math.min(text.length, at + 130);
-    let out = text.slice(start, end).trim();
-    if (start > 0) out = out.replace(/^\S*\s/, "");
-    if (end < text.length) out = out.replace(/\s\S*$/, "");
-    return (start > 0 ? "… " : "") + out + (end < text.length ? " …" : "");
+  // Same rules as the Java SearchHistory: newest first, a repeat moves to the front, at most 10.
+  function remember(query, mode) {
+    const list = loadHistory().filter((h) => !(h.query === query && h.mode === mode));
+    list.unshift({ query, mode, at: Date.now() });
+    saveHistory(list.slice(0, HISTORY_LIMIT));
   }
 
-  const mock = {
-    async indexFolder(path) {
-      await delay(500);
-      const started = performance.now();
-      const next = new Map();
-      for (const doc of window.MOCK_DOCS) {
-        for (const term of tokenize(doc.text)) {
-          if (!next.has(term)) next.set(term, new Map());
-          const postings = next.get(term);
-          postings.set(doc.id, (postings.get(doc.id) || 0) + 1);
-        }
-      }
-      index = next;
-      return {
-        path: path || "the sample documents",
-        documents: window.MOCK_DOCS.length,
-        terms: next.size,
-        tookMs: Math.max(1, Math.round(performance.now() - started))
-      };
+  const browser = {
+    async status() { return local.status(); },
+
+    async indexSamples() {
+      await delay(350); // long enough to see the indexing state, short enough not to annoy
+      return local.build(window.SAMPLE_DOCS, SAMPLE_LABEL, 0);
     },
 
-    async search(query, mode, opts) {
-      if (!index) {
-        const err = new Error("Nothing is indexed yet. Index a folder first.");
-        err.code = "NOT_INDEXED";
-        throw err;
+    // `read` comes from Files.read: { docs, label, skipped }.
+    async indexFiles(read) {
+      if (!read.docs.length) {
+        throw fail(read.skipped ? "None of the .txt files could be read." : "No .txt files were found there.", "NO_FILES");
       }
-      await delay(120);
-      const started = performance.now();
-      const terms = [...new Set(tokenize(query))];
-
-      // "all" intersects the per-word document sets, "any" unions them.
-      let ids = null;
-      for (const term of terms) {
-        const found = new Set((index.get(term) || new Map()).keys());
-        if (ids === null) ids = found;
-        else if (mode === "any") found.forEach((id) => ids.add(id));
-        else ids = new Set([...ids].filter((id) => found.has(id)));
-      }
-
-      const results = [...(ids || [])].map((id) => {
-        const doc = window.MOCK_DOCS.find((d) => d.id === id);
-        const matches = {};
-        let score = 0;
-        for (const term of terms) {
-          const count = (index.get(term) || new Map()).get(id);
-          if (count) { matches[term] = count; score += count; }
-        }
-        return { id, title: doc.title, path: doc.path, score, matches, snippet: makeSnippet(doc.text, Object.keys(matches)) };
-      });
-      results.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
-
-      // The landing-page demo passes { record: false } so it never touches the app's history.
-      if (!opts || opts.record !== false) {
-        const history = loadHistory().filter((h) => !(h.query === query && h.mode === mode));
-        history.unshift({ query, mode, at: Date.now() });
-        saveHistory(history.slice(0, HISTORY_LIMIT));
-      }
-
-      return {
-        query,
-        mode,
-        terms,
-        total: results.length,
-        tookMs: Math.max(1, Math.round(performance.now() - started)),
-        results
-      };
+      return local.build(read.docs, read.label, read.skipped);
     },
 
+    async indexFolder() {
+      throw fail("Indexing by path needs the Java backend. Choose or drop a folder instead.", "BAD_PATH");
+    },
+
+    async search(query, mode) {
+      await delay(90);
+      const data = local.search(query, mode);
+      if (data.query) remember(data.query, data.mode);
+      return data;
+    },
+
+    async words(limit) { return local.topWords(limit); },
+    async document(id) { return local.getDocument(id); },
     async history() { return loadHistory(); },
     async clearHistory() { saveHistory([]); }
   };
 
-  /* ---- Real implementation (Java backend) --------------------------------- */
+  /* ---- Java mode ------------------------------------------------------------ */
   async function http(method, path, body) {
     const res = await fetch(API_BASE + path, {
       method,
@@ -143,73 +94,78 @@
     if (!res.ok) {
       let info = {};
       try { info = await res.json(); } catch (e) { /* body was not JSON */ }
-      const err = new Error(info.error || "Request failed (" + res.status + ")");
-      err.code = info.code;
-      throw err;
+      throw fail(info.error || "Request failed (" + res.status + ")", info.code);
     }
     return res.status === 204 ? null : res.json();
   }
 
-  const remote = {
+  const java = {
+    status: async () => (await http("GET", "/health")).index || null,
+    indexSamples: () => http("POST", "/index", { path: SAMPLE_FOLDER }),
     indexFolder: (path) => http("POST", "/index", { path }),
+    indexFiles: async () => { throw fail("With the Java backend, type the folder path instead.", "BAD_PATH"); },
     search: (query, mode) => http("GET", "/search?q=" + encodeURIComponent(query) + "&mode=" + encodeURIComponent(mode)),
+    words: (limit) => http("GET", "/words?limit=" + encodeURIComponent(limit)),
+    document: (id) => http("GET", "/document?id=" + encodeURIComponent(id)),
     history: () => http("GET", "/history"),
     clearHistory: () => http("DELETE", "/history")
   };
 
-  /* ---- Choosing between them ----------------------------------------------- */
-  let backend = false; // true once the Java backend has answered /api/health
+  /* ---- Choosing between them ------------------------------------------------ */
+  let useJava = false; // true once the Java backend has answered /api/health
   let readyPromise = null;
 
-  // The Java backend only listens on this computer, so on any other address (a Vercel site, for example)
-  // there is no backend to look for, and we skip the request.
+  // The Java backend only listens on this computer, so on any other address
+  // (a Vercel site, for example) there is nothing to look for and no request is made.
   const LOCAL_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
 
   async function detect() {
     if (FORCE_MODE) {
-      backend = FORCE_MODE === "backend";
+      useJava = FORCE_MODE === "java";
       return;
     }
     if (LOCAL_HOSTS.indexOf(location.hostname) === -1) {
-      backend = false;
+      useJava = false;
       return;
     }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 2500);
     try {
       const res = await fetch(API_BASE + "/health", { cache: "no-store", signal: controller.signal });
-      const info = await res.json(); // a static host answers 404 or HTML, which fails here
-      backend = res.ok && info.ok === true;
+      const info = await res.json(); // a static server answers 404 or HTML, which fails here
+      useJava = res.ok && info.ok === true;
     } catch (e) {
-      backend = false;
+      useJava = false;
     } finally {
       clearTimeout(timer);
     }
   }
 
-  // The check runs the first time something asks for it, so the landing page, which never uses Api, makes no request.
   function ensureReady() {
     if (!readyPromise) readyPromise = detect();
     return readyPromise;
   }
 
-  async function engine() {
+  async function active() {
     await ensureReady();
-    return backend ? remote : mock;
+    return useJava ? java : browser;
   }
 
   window.Api = {
     get ready() { return ensureReady(); },
-    get isMock() { return !backend; },
-    // What the "use the sample files" button should index. The Java backend reads real folders, so it needs a path.
-    get sampleFolder() { return backend ? "sample-docs" : ""; },
-    indexFolder: async (path) => (await engine()).indexFolder(path),
-    search: async (query, mode) => (await engine()).search(query, mode),
-    history: async () => (await engine()).history(),
-    clearHistory: async () => (await engine()).clearHistory()
-  };
+    get mode() { return useJava ? "java" : "browser"; },
 
-  // The landing page always demos against the bundled sample files, even when
-  // the Java backend is running.
-  window.DemoApi = mock;
+    // True when the index holds the bundled sample files, so the app can suggest searches that fit them.
+    isSampleIndex: (stats) => !!stats && (stats.path === SAMPLE_FOLDER || stats.path === SAMPLE_LABEL),
+
+    status: async () => (await active()).status(),
+    indexSamples: async () => (await active()).indexSamples(),
+    indexFolder: async (path) => (await active()).indexFolder(path),
+    indexFiles: async (read) => (await active()).indexFiles(read),
+    search: async (query, mode) => (await active()).search(query, mode),
+    words: async (limit) => (await active()).words(limit),
+    document: async (id) => (await active()).document(id),
+    history: async () => (await active()).history(),
+    clearHistory: async () => (await active()).clearHistory()
+  };
 })();

@@ -3,14 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light dark">
+  <meta name="color-scheme" content="light">
   <title>DocIndex: search a folder of text files</title>
   <meta name="description" content="A local document indexing and search engine. Index a folder of text files once, then rank every match by keyword frequency. CSC2104 Object Oriented Programming mini project.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <script>document.documentElement.classList.add("js");</script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/landing.css">
@@ -32,14 +33,14 @@
   <main>
     <section class="hero">
       <div class="wrap">
-        <h1 class="hero__title rise">Find the right file by the <span class="hl">words</span> inside it.</h1>
+        <h1 class="hero__title rise">A search engine for a folder of <span class="hl">text files</span>.</h1>
 
         <div class="hero__grid">
           <div class="hero__copy">
-            <p class="hero__sub rise" style="--i: 1">Point it at a folder of text files. It builds an index once, then ranks every match by keyword frequency.</p>
+            <p class="hero__sub rise" style="--i: 1">It reads each .txt file once, builds an index of every word, and ranks the files that contain your words by how many times those words appear.</p>
             <div class="hero__cta rise" style="--i: 2">
-              <a class="btn btn--solid" href="app.html">Open app <i class="ph ph-arrow-right" aria-hidden="true"></i></a>
-              <a class="btn btn--line" href="#how">See how it works</a>
+              <a class="btn btn--solid" href="app.html">Open the app <i class="ph ph-arrow-right" aria-hidden="true"></i></a>
+              <a class="btn btn--line" href="#how">How it works</a>
             </div>
           </div>
 
@@ -50,17 +51,43 @@
               <button class="demo__mode" id="demo-mode" type="button" aria-label="Match mode, click to switch">any word</button>
             </div>
             <ul class="demo__list" id="demo-list" aria-live="polite"></ul>
-            <p class="demo__foot" id="demo-foot">Indexing the sample files</p>
+            <div class="demo__foot">
+              <p id="demo-foot">Indexing the sample files</p>
+              <a class="link demo__open" id="demo-open" href="app.html">Open in app <i class="ph ph-arrow-right" aria-hidden="true"></i></a>
+            </div>
           </div>
         </div>
+      </div>
+    </section>
+
+    <section class="features" aria-label="Features">
+      <div class="wrap">
+        <ul class="features__list">
+          <li class="feature reveal">
+            <h2>File indexing</h2>
+            <p>Reads every .txt file in a folder, sub folders included.</p>
+          </li>
+          <li class="feature reveal" style="--i: 1">
+            <h2>Keyword frequency</h2>
+            <p>Counts each word in each file and lists the most frequent words.</p>
+          </li>
+          <li class="feature reveal" style="--i: 2">
+            <h2>Ranked results</h2>
+            <p>Sorts the matching files by how often your words appear in them.</p>
+          </li>
+          <li class="feature reveal" style="--i: 3">
+            <h2>Search history</h2>
+            <p>Keeps your last ten searches so you can run one again.</p>
+          </li>
+        </ul>
       </div>
     </section>
 
     <section class="section" id="how">
       <div class="wrap">
         <div class="section__head reveal">
-          <h2 class="h2">From a folder to a ranked list</h2>
-          <p class="lede">Four steps, each one a plain Java collection. The samples follow one sentence through all of them.</p>
+          <h2 class="h2">How it works</h2>
+          <p class="lede">Indexing happens once. After that, each search is a few lookups in the index. The examples use one of the sample files.</p>
         </div>
 
         <ol class="flow">
@@ -75,7 +102,7 @@
 
           <li class="flow__row reveal">
             <h3 class="flow__verb">Split</h3>
-            <p class="flow__text">Lowercases the text, breaks it into words and drops filler like "the" and "is".</p>
+            <p class="flow__text">Lowercases the text, breaks it into words and drops common words such as "the" and "is".</p>
             <div class="sample">
               <p class="tokens">
                 <span class="tok stop" style="--i: 0">a</span>
@@ -101,6 +128,7 @@
               <dt>java</dt>
               <dd><span>file-io-basics.txt</span><b>2</b></dd>
               <dd><span>java-collections.txt</span><b>2</b></dd>
+              <dd><span>exception-handling.txt</span><b>1</b></dd>
               <dd><span>threads-and-synchronization.txt</span><b>1</b></dd>
             </dl>
           </li>
@@ -125,38 +153,38 @@
     <section class="section section--tight">
       <div class="wrap">
         <div class="section__head reveal">
-          <h2 class="h2">The Java behind it</h2>
-          <p class="lede">Each concept from the brief has one job in the engine.</p>
+          <h2 class="h2">Where the course topics are used</h2>
+          <p class="lede">The Java classes and collections from the syllabus, and what each one does in this project.</p>
         </div>
 
         <div class="bento">
           <article class="cell cell--a reveal">
             <h3>HashMap</h3>
             <p>The inverted index. Each word maps to the files containing it, with a count per file.</p>
-            <code class="code">Map&lt;String, Map&lt;Document, Integer&gt;&gt; index</code>
+            <code class="code">HashMap&lt;String, Map&lt;Integer, Integer&gt;&gt; index</code>
           </article>
 
           <article class="cell cell--b reveal" style="--i: 1">
             <h3>HashSet</h3>
-            <p>Holds the stop words, and gives match-all and match-any through intersection and union.</p>
+            <p>Holds the stop words. All words is a set intersection and any word is a union, done by two subclasses of the abstract Matcher class.</p>
           </article>
 
           <article class="cell cell--c reveal">
             <h3>PriorityQueue</h3>
-            <p>Keeps the best-scoring files on top, ordered by a Comparator.</p>
+            <p>Returns the results best first. SearchResult implements Comparable: higher score first, then file name.</p>
           </article>
 
           <article class="cell cell--d reveal" style="--i: 1">
             <h3>File I/O and Strings</h3>
-            <p>Walks the folder, reads each file and cuts the text into lowercase words.</p>
+            <p>Walks the folder with recursion, reads each file with a BufferedReader and cuts the text into lowercase words.</p>
           </article>
 
           <article class="cell cell--e reveal">
             <div>
-              <h3>Collections</h3>
-              <p>A bounded Deque keeps the last ten searches, newest first.</p>
+              <h3>LinkedList</h3>
+              <p>Keeps the last ten searches, newest first. When it is full, the oldest search is removed from the end.</p>
             </div>
-            <a class="btn btn--line" href="app.html">Open app <i class="ph ph-arrow-right" aria-hidden="true"></i></a>
+            <a class="btn btn--line" href="app.html">Open the app <i class="ph ph-arrow-right" aria-hidden="true"></i></a>
           </article>
         </div>
       </div>
@@ -171,8 +199,8 @@
   </footer>
 
   <script src="js/shared.js"></script>
-  <script src="js/mock-data.js"></script>
-  <script src="js/api.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/sample-docs.js"></script>
   <script src="js/landing.js"></script>
 </body>
 </html>
