@@ -33,6 +33,8 @@ import java.util.Map;
 public class WebServer {
 
     private static final int MAX_BODY_BYTES = 100000;
+    private static final int DEFAULT_WORDS = 10;
+    private static final int MAX_WORDS = 100;
 
     private final SearchEngine engine;
     private final File webRoot; // the folder with index.html, app.html, css and js
@@ -81,7 +83,8 @@ public class WebServer {
             String method = exchange.getRequestMethod();
 
             if (path.equals("/api/health")) {
-                sendJson(exchange, 200, "{\"ok\":true}");
+                // Also says what is indexed, so a reloaded page can pick up where it left off.
+                sendJson(exchange, 200, Json.health(engine.getIndexStats()));
             } else if (path.equals("/api/index")) {
                 if (method.equals("POST")) {
                     indexFolder(exchange);
@@ -91,6 +94,18 @@ public class WebServer {
             } else if (path.equals("/api/search")) {
                 if (method.equals("GET")) {
                     search(exchange);
+                } else {
+                    wrongMethod(exchange);
+                }
+            } else if (path.equals("/api/words")) {
+                if (method.equals("GET")) {
+                    topWords(exchange);
+                } else {
+                    wrongMethod(exchange);
+                }
+            } else if (path.equals("/api/document")) {
+                if (method.equals("GET")) {
+                    document(exchange);
                 } else {
                     wrongMethod(exchange);
                 }
@@ -136,6 +151,49 @@ public class WebServer {
             try {
                 SearchResponse response = engine.search(words, params.get("mode"));
                 sendJson(exchange, 200, Json.searchResponse(response));
+            } catch (IndexNotReadyException e) {
+                sendJson(exchange, 409, Json.error(e.getMessage(), "NOT_INDEXED"));
+            }
+        }
+
+        // GET /api/words?limit=10
+        private void topWords(HttpExchange exchange) throws IOException {
+            Map<String, String> params = parseQuery(exchange.getRequestURI().getRawQuery());
+            int limit = DEFAULT_WORDS;
+            try {
+                if (params.get("limit") != null) {
+                    limit = Integer.parseInt(params.get("limit"));
+                }
+            } catch (NumberFormatException e) {
+                // not a number: keep the default
+            }
+            limit = Math.max(1, Math.min(MAX_WORDS, limit));
+
+            try {
+                sendJson(exchange, 200, Json.words(engine.getTopWords(limit)));
+            } catch (IndexNotReadyException e) {
+                sendJson(exchange, 409, Json.error(e.getMessage(), "NOT_INDEXED"));
+            }
+        }
+
+        // GET /api/document?id=6
+        private void document(HttpExchange exchange) throws IOException {
+            Map<String, String> params = parseQuery(exchange.getRequestURI().getRawQuery());
+            int id;
+            try {
+                id = Integer.parseInt(params.get("id"));
+            } catch (NumberFormatException e) {
+                sendJson(exchange, 400, Json.error("The document id must be a number.", "BAD_ID"));
+                return;
+            }
+
+            try {
+                Document found = engine.getDocument(id);
+                if (found == null) {
+                    sendJson(exchange, 404, Json.error("That document is not in the index.", "NOT_FOUND"));
+                } else {
+                    sendJson(exchange, 200, Json.document(found));
+                }
             } catch (IndexNotReadyException e) {
                 sendJson(exchange, 409, Json.error(e.getMessage(), "NOT_INDEXED"));
             }

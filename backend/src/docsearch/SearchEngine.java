@@ -15,6 +15,7 @@ import java.util.Set;
  *
  *   indexFolder  loads a folder with DocumentLoader and builds an InvertedIndex
  *   search       looks the words up, combines them with a Matcher, scores and ranks the documents
+ *   getTopWords  the most frequent words in the whole index (keyword frequency)
  *
  * It handles one request at a time, which is all the console menu and the
  * web server need.
@@ -24,9 +25,15 @@ public class SearchEngine {
     private final Tokenizer tokenizer = new Tokenizer();
     private final SearchHistory history = new SearchHistory();
     private InvertedIndex index; // stays null until a folder has been indexed
+    private IndexStats stats;    // what the current index was built from
 
     public boolean isReady() {
         return index != null;
+    }
+
+    /** A summary of the current index, or null if nothing has been indexed yet. */
+    public IndexStats getIndexStats() {
+        return stats;
     }
 
     /**
@@ -47,8 +54,34 @@ public class SearchEngine {
         }
         index = fresh;
 
-        return new IndexStats(folderPath, fresh.getDocumentCount(), fresh.getWordCount(),
+        stats = new IndexStats(folderPath, fresh.getDocumentCount(), fresh.getWordCount(),
                 elapsedMs(started), loader.getSkipped().size());
+        return stats;
+    }
+
+    /**
+     * The most frequent words in the index (keyword frequency).
+     *
+     * @throws IndexNotReadyException if no folder has been indexed yet
+     */
+    public List<WordCount> getTopWords(int limit) throws IndexNotReadyException {
+        if (index == null) {
+            throw new IndexNotReadyException();
+        }
+        return index.topWords(limit);
+    }
+
+    /**
+     * Finds an indexed document by id, so its whole text can be shown.
+     * Returns null if there is no document with that id.
+     *
+     * @throws IndexNotReadyException if no folder has been indexed yet
+     */
+    public Document getDocument(int id) throws IndexNotReadyException {
+        if (index == null) {
+            throw new IndexNotReadyException();
+        }
+        return index.getDocument(id);
     }
 
     /**

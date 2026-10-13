@@ -123,6 +123,14 @@ public class SelfTest {
 
         thread.clear(); // this is only a copy of the index data
         check("changing a returned map does not change the index", index.countsFor("thread").size() == 1);
+
+        List<WordCount> top = index.topWords(3);
+        check("the most frequent word is 'java', 6 times in 4 documents",
+                top.get(0).getWord().equals("java") && top.get(0).getTotal() == 6 && top.get(0).getDocuments() == 4);
+        check("top words come out by total: java 6, file 5, class 4",
+                top.size() == 3 && top.get(1).getWord().equals("file") && top.get(1).getTotal() == 5
+                        && top.get(2).getWord().equals("class") && top.get(2).getTotal() == 4);
+        check("asking for more words than exist gives every word once", index.topWords(1000).size() == 169);
     }
 
     private static void testMatchers() {
@@ -155,6 +163,13 @@ public class SelfTest {
                 + queue.poll().getDocument().getTitle() + " "
                 + queue.poll().getDocument().getTitle();
         check("results come out by score, then by file name", order.equals("b.txt c.txt a.txt"));
+
+        PriorityQueue<WordCount> words = new PriorityQueue<WordCount>();
+        words.add(new WordCount("data", 4, 4));
+        words.add(new WordCount("java", 6, 4));
+        words.add(new WordCount("class", 4, 2));
+        String wordOrder = words.poll().getWord() + " " + words.poll().getWord() + " " + words.poll().getWord();
+        check("word counts come out by total, then alphabetically", wordOrder.equals("java class data"));
     }
 
     private static void testSnippet() {
@@ -217,6 +232,15 @@ public class SelfTest {
         }
         check("searching before indexing raises IndexNotReadyException", refused && !engine.isReady());
 
+        boolean wordsRefused = false;
+        try {
+            engine.getTopWords(5);
+        } catch (IndexNotReadyException e) {
+            wordsRefused = true;
+        }
+        check("asking for top words before indexing raises IndexNotReadyException", wordsRefused);
+        check("there are no index stats before indexing", engine.getIndexStats() == null);
+
         boolean badPath = false;
         try {
             engine.indexFolder("no-such-folder");
@@ -229,6 +253,8 @@ public class SelfTest {
         IndexStats stats = engine.indexFolder("sample-docs");
         check("indexing reports 6 documents and 169 words", stats.getDocuments() == 6 && stats.getWords() == 169);
         check("the engine is ready after indexing", engine.isReady());
+        check("the engine remembers the stats of its index",
+                engine.getIndexStats() != null && engine.getIndexStats().getPath().equals("sample-docs"));
 
         try {
             SearchResponse any = engine.search("java thread", "any");
@@ -255,6 +281,12 @@ public class SelfTest {
             check("an unknown word gives no results", engine.search("zebra", "any").getTotal() == 0);
             check("in all mode one unknown word means no results", engine.search("java zebra", "all").getTotal() == 0);
             check("in any mode one unknown word does not matter", engine.search("java zebra", "any").getTotal() == 4);
+
+            int bestId = results.get(0).getDocument().getId();
+            check("a result's document can be fetched whole by its id",
+                    engine.getDocument(bestId).getText().startsWith("A thread is the smallest unit"));
+            check("an unknown document id gives null", engine.getDocument(999) == null);
+            check("the engine gives its top words", engine.getTopWords(1).get(0).getWord().equals("java"));
         } catch (IndexNotReadyException e) {
             check("searching after indexing must not raise IndexNotReadyException", false);
         }
@@ -279,6 +311,16 @@ public class SelfTest {
         check("history is a list of query, mode and time",
                 Json.history(entries).equals("[{\"query\":\"java\",\"mode\":\"all\",\"at\":123},{\"query\":\"a \\\"b\\\"\",\"mode\":\"any\",\"at\":456}]"));
         check("an empty history is an empty list", Json.history(new ArrayList<HistoryEntry>()).equals("[]"));
+
+        check("health says nothing is indexed yet", Json.health(null).equals("{\"ok\":true,\"index\":null}"));
+        check("health includes the index stats once there is an index",
+                Json.health(new IndexStats("sample-docs", 6, 169, 5, 0)).startsWith("{\"ok\":true,\"index\":{\"path\":\"sample-docs\",\"documents\":6"));
+        check("top words are a list of word, total and documents",
+                Json.words(Arrays.asList(new WordCount("java", 6, 4), new WordCount("file", 5, 2))).equals(
+                        "[{\"word\":\"java\",\"total\":6,\"documents\":4},{\"word\":\"file\",\"total\":5,\"documents\":2}]"));
+        check("a document has its id, title, path with forward slashes, and escaped text",
+                Json.document(new Document(2, "a.txt", "notes\\a.txt", "line one\nline two")).equals(
+                        "{\"id\":2,\"title\":\"a.txt\",\"path\":\"notes/a.txt\",\"text\":\"line one\\nline two\"}"));
 
         check("readString reads a plain value", Json.readString("{\"path\":\"sample-docs\"}", "path").equals("sample-docs"));
         check("readString unescapes Windows paths",
