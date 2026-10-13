@@ -50,6 +50,33 @@ public class Json {
                 + ",\"skipped\":" + stats.getSkipped() + "}";
     }
 
+    /** {"ok":true,"index":null} before indexing, or {"ok":true,"index":{...}} with the current index stats. */
+    public static String health(IndexStats stats) {
+        return "{\"ok\":true,\"index\":" + (stats == null ? "null" : indexStats(stats)) + "}";
+    }
+
+    /** [{"word":"java","total":6,"documents":4}, ...] */
+    public static String words(List<WordCount> words) {
+        StringBuilder out = new StringBuilder("[");
+        for (WordCount word : words) {
+            if (out.length() > 1) {
+                out.append(',');
+            }
+            out.append("{\"word\":").append(quote(word.getWord()))
+                    .append(",\"total\":").append(word.getTotal())
+                    .append(",\"documents\":").append(word.getDocuments()).append('}');
+        }
+        return out.append(']').toString();
+    }
+
+    /** One whole document: {"id":6,"title":"...","path":"...","text":"..."} */
+    public static String document(Document document) {
+        return "{\"id\":" + document.getId()
+                + ",\"title\":" + quote(document.getTitle())
+                + ",\"path\":" + quote(document.getPath().replace('\\', '/'))
+                + ",\"text\":" + quote(document.getText()) + "}";
+    }
+
     public static String history(List<HistoryEntry> entries) {
         StringBuilder out = new StringBuilder("[");
         for (HistoryEntry entry : entries) {
