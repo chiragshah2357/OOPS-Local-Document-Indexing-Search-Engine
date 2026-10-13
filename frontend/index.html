@@ -6,6 +6,7 @@
   <meta name="color-scheme" content="light dark">
   <title>DocIndex: search a folder of text files</title>
   <meta name="description" content="A local document indexing and search engine. Index a folder of text files once, then rank every match by keyword frequency. CSC2104 Object Oriented Programming mini project.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <script>document.documentElement.classList.add("js");</script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -50,9 +51,39 @@
               <button class="demo__mode" id="demo-mode" type="button" aria-label="Match mode, click to switch">any word</button>
             </div>
             <ul class="demo__list" id="demo-list" aria-live="polite"></ul>
-            <p class="demo__foot" id="demo-foot">Indexing the sample files</p>
+            <div class="demo__foot">
+              <p id="demo-foot">Indexing the sample files</p>
+              <a class="link demo__open" id="demo-open" href="app.html">Open in app <i class="ph ph-arrow-right" aria-hidden="true"></i></a>
+            </div>
           </div>
         </div>
+      </div>
+    </section>
+
+    <section class="features" aria-label="Features">
+      <div class="wrap">
+        <ul class="features__list">
+          <li class="feature reveal">
+            <i class="ph ph-folder-open" aria-hidden="true"></i>
+            <h2>File indexing</h2>
+            <p>Reads every .txt file in a folder and its sub folders, once.</p>
+          </li>
+          <li class="feature reveal" style="--i: 1">
+            <i class="ph ph-hash" aria-hidden="true"></i>
+            <h2>Keyword frequency</h2>
+            <p>Counts each word in each file, and lists the most frequent ones.</p>
+          </li>
+          <li class="feature reveal" style="--i: 2">
+            <i class="ph ph-ranking" aria-hidden="true"></i>
+            <h2>Ranked results</h2>
+            <p>Sorts matching files by how often your words appear in them.</p>
+          </li>
+          <li class="feature reveal" style="--i: 3">
+            <i class="ph ph-clock-counter-clockwise" aria-hidden="true"></i>
+            <h2>Search history</h2>
+            <p>Keeps your last ten searches, one click from running again.</p>
+          </li>
+        </ul>
       </div>
     </section>
 
@@ -60,7 +91,7 @@
       <div class="wrap">
         <div class="section__head reveal">
           <h2 class="h2">From a folder to a ranked list</h2>
-          <p class="lede">Four steps, each one a plain Java collection. The samples follow one sentence through all of them.</p>
+          <p class="lede">Four steps, each one built on a plain Java collection. The samples follow one sentence through all of them.</p>
         </div>
 
         <ol class="flow">
@@ -101,6 +132,7 @@
               <dt>java</dt>
               <dd><span>file-io-basics.txt</span><b>2</b></dd>
               <dd><span>java-collections.txt</span><b>2</b></dd>
+              <dd><span>exception-handling.txt</span><b>1</b></dd>
               <dd><span>threads-and-synchronization.txt</span><b>1</b></dd>
             </dl>
           </li>
@@ -133,7 +165,7 @@
           <article class="cell cell--a reveal">
             <h3>HashMap</h3>
             <p>The inverted index. Each word maps to the files containing it, with a count per file.</p>
-            <code class="code">Map&lt;String, Map&lt;Document, Integer&gt;&gt; index</code>
+            <code class="code">HashMap&lt;String, Map&lt;Integer, Integer&gt;&gt; index</code>
           </article>
 
           <article class="cell cell--b reveal" style="--i: 1">
@@ -143,18 +175,18 @@
 
           <article class="cell cell--c reveal">
             <h3>PriorityQueue</h3>
-            <p>Keeps the best-scoring files on top, ordered by a Comparator.</p>
+            <p>Keeps the best-scoring file on top. Each result implements Comparable, so it knows its own order.</p>
           </article>
 
           <article class="cell cell--d reveal" style="--i: 1">
             <h3>File I/O and Strings</h3>
-            <p>Walks the folder, reads each file and cuts the text into lowercase words.</p>
+            <p>Walks the folder with recursion, reads each file with a BufferedReader and cuts the text into lowercase words.</p>
           </article>
 
           <article class="cell cell--e reveal">
             <div>
-              <h3>Collections</h3>
-              <p>A bounded Deque keeps the last ten searches, newest first.</p>
+              <h3>LinkedList</h3>
+              <p>Keeps the last ten searches, newest first. Inheritance shows up too: two Matcher subclasses decide between all and any.</p>
             </div>
             <a class="btn btn--line" href="app.html">Open app <i class="ph ph-arrow-right" aria-hidden="true"></i></a>
           </article>
@@ -171,8 +203,8 @@
   </footer>
 
   <script src="js/shared.js"></script>
-  <script src="js/mock-data.js"></script>
-  <script src="js/api.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/sample-docs.js"></script>
   <script src="js/landing.js"></script>
 </body>
 </html>
