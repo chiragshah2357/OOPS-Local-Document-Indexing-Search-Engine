@@ -19,6 +19,7 @@ import java.util.Scanner;
 public class Main {
 
     private static final String SAMPLE_FOLDER = "sample-docs";
+    private static final int TOP_WORDS = 10;
     private static final int DEFAULT_PORT = 8080;
     private static final String DEFAULT_FRONTEND = "../frontend";
 
@@ -72,12 +73,13 @@ public class Main {
             System.out.println();
             System.out.println("1. Index a folder");
             System.out.println("2. Search");
-            System.out.println("3. Show search history");
-            System.out.println("4. Clear search history");
-            System.out.println("5. Exit");
+            System.out.println("3. Show the most frequent words");
+            System.out.println("4. Show search history");
+            System.out.println("5. Clear search history");
+            System.out.println("6. Exit");
 
             String choice = ask(input, "Choose an option: ");
-            if (choice == null || choice.equals("5")) {
+            if (choice == null || choice.equals("6")) {
                 System.out.println("Goodbye.");
                 return;
             }
@@ -87,12 +89,14 @@ public class Main {
             } else if (choice.equals("2")) {
                 search(engine, input);
             } else if (choice.equals("3")) {
-                showHistory(engine);
+                showTopWords(engine);
             } else if (choice.equals("4")) {
+                showHistory(engine);
+            } else if (choice.equals("5")) {
                 engine.clearHistory();
                 System.out.println("Search history cleared.");
             } else {
-                System.out.println("Please type a number from 1 to 5.");
+                System.out.println("Please type a number from 1 to 6.");
             }
         }
     }
@@ -171,6 +175,26 @@ public class Main {
             System.out.println("   " + result.getDocument().getPath());
             System.out.println("   words: " + describeMatches(result.getMatches()));
             System.out.println("   " + result.getSnippet());
+            rank++;
+        }
+    }
+
+    // Keyword frequency: the words that appear most often across all indexed files.
+    private static void showTopWords(SearchEngine engine) {
+        List<WordCount> words;
+        try {
+            words = engine.getTopWords(TOP_WORDS);
+        } catch (IndexNotReadyException e) {
+            System.out.println("Index a folder first (option 1).");
+            return;
+        }
+
+        System.out.println();
+        System.out.println("The " + words.size() + " most frequent words:");
+        int rank = 1;
+        for (WordCount word : words) {
+            System.out.println(rank + ". " + word.getWord() + "   " + word.getTotal() + " times in "
+                    + word.getDocuments() + " file(s)");
             rank++;
         }
     }

@@ -11,15 +11,18 @@ window.UI = (function () {
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  // Wrap every occurrence of a search term in <mark>, escaping everything else.
+  // The same word rule as both engines: a run of letters or digits.
+  const WORD = /[\p{L}\p{Nd}]+/gu;
+
+  // Wraps every word that is one of the search terms in <mark>, and escapes everything else.
   function highlight(text, terms) {
-    if (!terms.length) return esc(text);
-    const safe = terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-    const re = new RegExp("\\b(?:" + safe.join("|") + ")\\b", "gi");
+    const wanted = new Set(terms);
+    text = String(text);
+    if (!wanted.size) return esc(text);
     let out = "";
     let last = 0;
-    let m;
-    while ((m = re.exec(text))) {
+    for (const m of text.matchAll(WORD)) {
+      if (!wanted.has(m[0].toLowerCase())) continue;
       out += esc(text.slice(last, m.index)) + "<mark>" + esc(m[0]) + "</mark>";
       last = m.index + m[0].length;
     }
@@ -28,7 +31,7 @@ window.UI = (function () {
 
   // Eases a number up to its final value so a fresh index "arrives" instead of popping in.
   function countUp(el, to, ms) {
-    if (reducedMotion() || to < 2) {
+    if (!ms || reducedMotion() || to < 2) {
       el.textContent = to;
       return;
     }

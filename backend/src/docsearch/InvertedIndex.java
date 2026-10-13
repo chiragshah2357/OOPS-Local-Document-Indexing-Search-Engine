@@ -1,7 +1,10 @@
 package docsearch;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
 
 /**
  * Remembers which documents contain which words, and how many times.
@@ -57,6 +60,27 @@ public class InvertedIndex {
             return new HashMap<>();
         }
         return new HashMap<>(counts);
+    }
+
+    /**
+     * The most frequent words in the whole index, most frequent first.
+     * A word's total is the sum of its counts in every document.
+     */
+    public List<WordCount> topWords(int limit) {
+        PriorityQueue<WordCount> queue = new PriorityQueue<WordCount>();
+        for (Map.Entry<String, Map<Integer, Integer>> entry : index.entrySet()) {
+            int total = 0;
+            for (int count : entry.getValue().values()) {
+                total += count;
+            }
+            queue.add(new WordCount(entry.getKey(), total, entry.getValue().size()));
+        }
+
+        List<WordCount> top = new ArrayList<WordCount>();
+        while (!queue.isEmpty() && top.size() < limit) {
+            top.add(queue.poll());
+        }
+        return top;
     }
 
     /** Finds a document by id, or null if there is none. */

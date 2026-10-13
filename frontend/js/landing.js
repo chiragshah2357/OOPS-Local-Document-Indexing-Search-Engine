@@ -1,9 +1,9 @@
 /*
  * Landing page behaviour.
  *   1. Scroll reveals (IntersectionObserver, no scroll listeners).
- *   2. The hero demo: a real search over the bundled sample files. It types a
- *      few example queries by itself, and hands control over the moment the
- *      visitor touches it.
+ *   2. The hero demo: a real search over the bundled sample files, run by the
+ *      browser engine (engine.js). It types a few example queries by itself,
+ *      and hands control over the moment the visitor touches it.
  */
 (function () {
   "use strict";
@@ -29,6 +29,8 @@
   const list = $("demo-list");
   const modeBtn = $("demo-mode");
   const foot = $("demo-foot");
+  const openLink = $("demo-open");
+  const engine = Engine.create(); // its own index, separate from the app's
 
   const SCRIPT = [
     { q: "java thread", mode: "any" },
@@ -40,7 +42,6 @@
 
   let mode = "any";
   let manual = false; // set once the visitor interacts, which ends autoplay
-  let seq = 0;
   let stats = null;
 
   const modeLabel = () => (mode === "any" ? "any word" : "all words");
@@ -74,19 +75,19 @@
   function setFoot(data) {
     if (!stats) return;
     const base = plural(stats.documents, "sample file") + ", " + plural(stats.terms, "word") + " indexed in your browser.";
-    foot.textContent = data && data.total > MAX_ROWS ? "Top " + MAX_ROWS + " of " + data.total + " matches. " + base : base;
+    foot.textContent = data && data.total > MAX_ROWS ? "Top " + MAX_ROWS + " of " + data.total + ". " + base : base;
+    // "Open in app" carries the search over, so the app can run it after indexing.
+    openLink.href = data && data.query ? "app.html?q=" + encodeURIComponent(data.query) + "&mode=" + data.mode : "app.html";
   }
 
-  async function run() {
+  function run() {
     const q = input.value.trim();
-    const mine = ++seq;
     if (!q) {
       list.innerHTML = "";
       setFoot(null);
       return;
     }
-    const data = await DemoApi.search(q, mode, { record: false });
-    if (mine !== seq) return;
+    const data = engine.search(q, mode);
     renderRows(data);
     setFoot(data);
   }
@@ -114,7 +115,7 @@
       syncMode();
       await typeInto(item.q);
       if (manual) return;
-      await run();
+      run();
       await wait(3400);
       if (manual) return;
       // On the very last step, leave the final answer on screen.
@@ -146,9 +147,7 @@
   });
 
   syncMode();
-  DemoApi.indexFolder("").then((info) => {
-    stats = info;
-    setFoot(null);
-    autoplay();
-  });
+  stats = engine.build(window.SAMPLE_DOCS, "the sample files", 0);
+  setFoot(null);
+  autoplay();
 })();
