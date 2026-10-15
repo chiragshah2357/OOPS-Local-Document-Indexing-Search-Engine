@@ -177,16 +177,16 @@ Vercel hosts static files, so the deployed site runs in browser mode. It cannot 
 3. Set **Framework Preset** to `Other` and **Root Directory** to `frontend`.
 4. Leave **Build Command** and **Output Directory** empty, then deploy.
 
-No `vercel.json` is needed. The landing page opens first, and **Open app** leads into the search app. On the hosted site the app makes no request to `/api`, because the address is not `localhost`.
+No `vercel.json` is needed. The landing page opens first, and **Open the app** leads into the search app. On the hosted site the app makes no request to `/api`, because the address is not `localhost`.
 
 ## Design notes
 
 - One accent, a highlighter lime, used only as a background behind dark text.
-- Light and dark themes follow the system setting.
+- Light theme only.
 - Motion only animates `transform` and `opacity`, and switches off under `prefers-reduced-motion`.
 - Works down to phone width; on a phone the Index panel comes first.
 
 ## Credits
 
-- Geist and Geist Mono (SIL Open Font License), loaded from Google Fonts.
+- IBM Plex Sans and IBM Plex Mono (SIL Open Font License), loaded from Google Fonts.
 - Phosphor Icons (MIT), loaded from unpkg.
