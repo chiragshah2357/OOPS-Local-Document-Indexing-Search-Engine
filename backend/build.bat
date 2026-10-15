@@ -17,7 +17,8 @@ if errorlevel 1 (
 )
 
 if not exist out mkdir out
-dir /s /b src\*.java > out\sources.txt
+rem List the sources with paths relative to this folder, so a folder name with spaces higher up does not break javac.
+(for %%f in (src\docsearch\*.java) do @echo %%f) > out\sources.txt
 
 rem -source 8 -target 8 makes the classes run on Java 8 even if a newer JDK compiles them.
 "%JAVAC%" -encoding UTF-8 -source 8 -target 8 -Xlint:-options -d out @out\sources.txt

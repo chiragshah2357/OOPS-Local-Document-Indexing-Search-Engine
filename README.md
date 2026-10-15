@@ -33,7 +33,7 @@ Searches can ask for files that contain **all** the words or **any** of them.
 
 ## Screenshots
 
-| Ranked results and keyword frequency | Document view (dark theme) |
+| Ranked results and keyword frequency | Document view |
 |---|---|
 | ![Search results for java thread, with the index panel and the most frequent words](docs/screenshots/app-results.png) | ![A document opened from the results, with every match highlighted](docs/screenshots/app-viewer.png) |
 

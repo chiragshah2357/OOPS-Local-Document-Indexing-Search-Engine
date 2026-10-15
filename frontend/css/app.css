@@ -17,8 +17,8 @@
   margin-bottom: 28px;
   font-size: clamp(1.75rem, 3.4vw, 2.5rem);
   font-weight: 600;
-  line-height: 1.1;
-  letter-spacing: -0.035em;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
 }
 
 .field__label {
@@ -287,7 +287,7 @@
 }
 
 .stats dt { font-size: 0.75rem; color: var(--muted); }
-.stats dd { margin: 4px 0 0; font-size: 2rem; font-weight: 600; line-height: 1; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+.stats dd { margin: 4px 0 0; font-size: 2rem; font-weight: 600; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 
 .panel__note { margin-top: 16px; font-size: 0.8125rem; line-height: 1.5; color: var(--muted); overflow-wrap: anywhere; }
 .panel__note--quiet { margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 0.75rem; }
