@@ -43,11 +43,20 @@
           <button class="btn btn--solid" type="submit">Search</button>
         </div>
 
-        <fieldset class="seg">
-          <legend class="sr-only">Match mode</legend>
-          <label><input type="radio" name="mode" value="all" checked><span>All words</span></label>
-          <label><input type="radio" name="mode" value="any"><span>Any word</span></label>
-        </fieldset>
+        <div class="options">
+          <fieldset class="seg">
+            <legend class="sr-only">Match mode</legend>
+            <label><input type="radio" name="mode" value="all" checked><span>All words</span></label>
+            <label><input type="radio" name="mode" value="any"><span>Any word</span></label>
+          </fieldset>
+          <!-- Gemini suggests related words; only with the Java engine. -->
+          <label class="smart" id="smart-label">
+            <input type="checkbox" id="smart" name="smart" disabled>
+            <span class="smart__switch" aria-hidden="true"></span>
+            <span>Smart search</span>
+            <span class="smart__by">Gemini</span>
+          </label>
+        </div>
       </form>
 
       <div class="results rise" style="--i: 2" id="results" aria-live="polite"></div>
@@ -90,6 +99,21 @@
 
         <p class="panel__note" id="index-note" role="status">Checking for the Java engine…</p>
         <p class="panel__note panel__note--quiet" id="mode-note" hidden></p>
+      </section>
+
+      <!-- Ask your notes: the engine finds the files, Gemini writes the answer from the top three. -->
+      <section class="panel ask rise" style="--i: 3" id="ask-panel" aria-labelledby="ask-title">
+        <div class="panel__head">
+          <h2 class="panel__title" id="ask-title">Ask your notes</h2>
+          <span class="badge" id="llm-badge"><i class="badge__dot" aria-hidden="true"></i>Gemini</span>
+        </div>
+        <form id="ask-form" autocomplete="off">
+          <label class="sr-only" for="question">Question</label>
+          <textarea class="input input--area" id="question" rows="2" spellcheck="false" placeholder="What causes a deadlock?" disabled></textarea>
+          <button class="btn btn--line btn--block" id="ask-btn" type="submit" disabled>Ask</button>
+        </form>
+        <div class="answer" id="answer" aria-live="polite" hidden></div>
+        <p class="panel__note" id="ask-note">Checking for the Java engine…</p>
       </section>
 
       <section class="words rise" style="--i: 3" id="words-panel" aria-labelledby="words-title" hidden>

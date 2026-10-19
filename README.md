@@ -13,6 +13,7 @@ Point it at a folder of text files. It reads them once, builds an index, and the
 - [Try it](#try-it)
 - [How it works](#how-it-works)
 - [Class design](#class-design)
+- [Semantic search and LLM integration](#semantic-search-and-llm-integration)
 - [Course topics](#course-topics)
 - [What is in the repository](#what-is-in-the-repository)
 - [Tests](#tests)
@@ -31,6 +32,13 @@ The four features from the project brief, and where to see each one:
 
 Searches can ask for files that contain **all** the words or **any** of them.
 
+The title's two extra parts use Google's Gemini, and only with the Java engine (see [Semantic search and LLM integration](#semantic-search-and-llm-integration)):
+
+| Feature | What you see | Java that does it |
+|---|---|---|
+| **Semantic search** | Turn on **Smart search**: Gemini adds up to 5 related words (`concurrency` also finds `thread`, `deadlock`), and the same engine ranks the files. | `QueryExpander` |
+| **LLM answers** | **Ask your notes**: the engine finds the 3 best files, and Gemini answers from those files only, naming them as sources. | `AnswerGenerator`, `Answer` |
+
 ## Screenshots
 
 | Ranked results and keyword frequency | Document view |
@@ -45,7 +53,7 @@ Searches can ask for files that contain **all** the words or **any** of them.
 |---|---|---|
 | Use the website with the Java engine | `backend\serve.bat` | Open http://localhost:8080 |
 | Use the console menu | `backend\run.bat` | Follow the menu |
-| Run the tests | `backend\test.bat` | Expect `88 passed, 0 failed` |
+| Run the tests | `backend\test.bat` | Expect `108 passed, 0 failed` |
 | Try the website with no Java | `python -m http.server 5173` in `frontend` | Open http://localhost:5173 |
 
 The Java parts need a JDK (IntelliJ ships one: set `JAVA_HOME` to it). A plain Java runtime cannot compile.
@@ -294,24 +302,79 @@ classDiagram
         -int documents
         +compareTo(WordCount other) int
     }
+    class LlmProvider {
+        <<abstract>>
+        +complete(String prompt, int maxTokens)* String
+        +isAvailable()* boolean
+        +fromEnvironment()$ LlmProvider
+    }
+    class GeminiProvider {
+        +complete(String prompt, int maxTokens) String
+    }
+    class OfflineProvider {
+        +complete(String prompt, int maxTokens) String
+    }
     class Exception
     class IndexNotReadyException
+    class LlmException
 
     Matcher <|-- AllWordsMatcher : intersection
     Matcher <|-- AnyWordMatcher : union
+    LlmProvider <|-- GeminiProvider : calls Gemini
+    LlmProvider <|-- OfflineProvider : no key
     Comparable <|.. SearchResult : by score, then name
     Comparable <|.. WordCount : by total, then word
     Exception <|-- IndexNotReadyException
+    Exception <|-- LlmException
 ```
 
-The other classes are small helpers: `SnippetBuilder` cuts the text around the first match, `Json` turns answers into JSON for the website, and `IndexStats` and `SearchResponse` carry answers back to the caller. [backend/README.md](backend/README.md) has a table of every class.
+The other classes are small helpers: `SnippetBuilder` cuts the text around the first match, `Json` turns answers into JSON for the website, and `IndexStats`, `SearchResponse` and `Answer` carry answers back to the caller. `QueryExpander` and `AnswerGenerator` use an `LlmProvider` without knowing which one it is. [backend/README.md](backend/README.md) has a table of every class.
+
+## Semantic search and LLM integration
+
+Gemini sits on top of the search engine and never replaces it: the engine still reads, indexes and ranks every file. Gemini is used as little as possible:
+
+- **At most one call per new smart search or question.** Answers and suggested words are remembered in a `HashMap`, so asking again is free.
+- **No call at all** when no file matches, when the words are all stop words, or when no key is set.
+- **Small prompts:** a question sends only the 3 best files, about 600 characters from each, and asks for at most 80 words back.
+- **Never during indexing**, and the app shows how many calls have been made.
+
+```mermaid
+sequenceDiagram
+    actor you as You
+    participant ag as AnswerGenerator
+    participant se as SearchEngine
+    participant llm as LlmProvider (Gemini)
+
+    you->>ag: "What causes a deadlock?"
+    ag->>se: search(question, "any")
+    se-->>ag: ranked files
+    alt no file matches
+        ag-->>you: "None of the files contain these words" (Gemini not asked)
+    else
+        ag->>llm: question + the top 3 files (600 characters each)
+        llm-->>ag: short answer naming [file.txt]
+        ag-->>you: answer + source files (remembered for next time)
+    end
+```
+
+To turn it on, set your Gemini API key before starting the Java engine. The key stays on your computer and is never written in the code:
+
+```bat
+set GEMINI_API_KEY=your-key-here
+backend\serve.bat
+```
+
+The model is `gemini-3.8-flash`; set `GEMINI_MODEL` to use another. Without a key everything else still works: smart search becomes a normal search, and a question lists the best matching files. The Vercel site has no Java engine, so these two features are switched off there.
 
 ## Course topics
 
 | Topic | Where it is used |
 |---|---|
 | Classes, objects and encapsulation | `Document`, `SearchResult`, `WordCount`, `IndexStats` and others: private fields, getters only |
-| Inheritance, abstract classes, polymorphism | `Matcher` with `AllWordsMatcher` and `AnyWordMatcher` |
+| Inheritance, abstract classes, polymorphism | `Matcher` with `AllWordsMatcher` and `AnyWordMatcher`; `LlmProvider` with `GeminiProvider` and `OfflineProvider` |
+| Method overloading | `SnippetBuilder.build` (default size, or a chosen size for the LLM), `Json.searchResponse` |
+| Nested classes | `SelfTest.FakeProvider`, a stand-in for Gemini in the tests |
 | Interfaces: `Comparable` | `SearchResult` (by score) and `WordCount` (by total) know their own order |
 | `HashMap` | `InvertedIndex`: word to file to count |
 | `HashSet` | Stop words in `Tokenizer`, and the file sets the matchers combine |
@@ -319,10 +382,10 @@ The other classes are small helpers: `SnippetBuilder` cuts the text around the f
 | `LinkedList` | `SearchHistory` |
 | File I/O and recursion | `DocumentLoader`: `File.listFiles`, `BufferedReader`, a method that calls itself for sub folders |
 | Strings and `StringBuilder` | `Tokenizer`, `SnippetBuilder`, `Json` |
-| Exception handling | `IndexNotReadyException` (a custom checked exception), and try/catch/finally around file reading |
+| Exception handling | `IndexNotReadyException` and `LlmException` (custom checked exceptions), and try/catch/finally around file reading |
 | `Scanner` | The console menu in `Main` |
 
-The one thing outside the course is `WebServer`, which uses the `HttpServer` that comes with Java so the browser can talk to the engine. It only passes messages along.
+Two classes go outside the course, and both only pass messages along: `WebServer` uses the `HttpServer` that comes with Java so the browser can talk to the engine, and `GeminiProvider` uses `HttpURLConnection` to send a prompt to Gemini.
 
 ## What is in the repository
 
@@ -341,7 +404,7 @@ docs/screenshots/   the pictures in this README
 
 ## Tests
 
-`backend\test.bat` builds the project and runs `SelfTest`, which prints `PASS` or `FAIL` for 88 checks: the tokenizer, the loader, the index and its top words, both matchers, ranking, snippets, history, the engine end to end, and the JSON the web server sends. No test framework is needed.
+`backend\test.bat` builds the project and runs `SelfTest`, which prints `PASS` or `FAIL` for 108 checks: the tokenizer, the loader, the index and its top words, both matchers, ranking, snippets, history, the engine end to end, the JSON the web server sends, and the Gemini layer. The Gemini checks use a fake provider and a small fake Gemini server on your own computer, so they need no key and no internet. No test framework is needed.
 
 The sample files give the same answers in both engines, which the tests and the frontend rely on: 6 documents, 169 different words, `java thread` with any word gives scores 3, 2, 2, 1, and the most frequent word is `java` (6 times in 4 files).
 

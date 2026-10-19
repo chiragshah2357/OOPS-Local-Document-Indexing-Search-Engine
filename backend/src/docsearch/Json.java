@@ -50,9 +50,67 @@ public class Json {
                 + ",\"skipped\":" + stats.getSkipped() + "}";
     }
 
-    /** {"ok":true,"index":null} before indexing, or {"ok":true,"index":{...}} with the current index stats. */
-    public static String health(IndexStats stats) {
-        return "{\"ok\":true,\"index\":" + (stats == null ? "null" : indexStats(stats)) + "}";
+    /**
+     * {"ok":true,"index":null,"llm":{...}} before indexing, or with the current index stats.
+     * "llm" says whether Gemini is set up, which model, and how many calls it has had.
+     */
+    public static String health(IndexStats stats, LlmProvider llm) {
+        return "{\"ok\":true,\"index\":" + (stats == null ? "null" : indexStats(stats))
+                + ",\"llm\":{\"available\":" + llm.isAvailable()
+                + ",\"model\":" + quote(llm.getModel())
+                + ",\"calls\":" + llm.getCalls() + "}}";
+    }
+
+    /** ["java","thread"] */
+    public static String stringList(List<String> items) {
+        StringBuilder out = new StringBuilder("[");
+        for (String item : items) {
+            if (out.length() > 1) {
+                out.append(',');
+            }
+            out.append(quote(item));
+        }
+        return out.append(']').toString();
+    }
+
+    /**
+     * The body of a Gemini generateContent request. maxOutputTokens caps how
+     * much the model may write; lowThinking asks it to think briefly.
+     */
+    public static String geminiRequest(String prompt, int maxTokens, boolean lowThinking) {
+        return "{\"contents\":[{\"parts\":[{\"text\":" + quote(prompt) + "}]}],"
+                + "\"generationConfig\":{\"maxOutputTokens\":" + maxTokens
+                + (lowThinking ? ",\"thinkingConfig\":{\"thinkingLevel\":\"LOW\"}" : "") + "}}";
+    }
+
+    /** {"answer":"...","fromLlm":true,"terms":[...],"sources":[{"id":6,"title":"..."}],"llmCalls":2} */
+    public static String answer(Answer answer, int llmCalls) {
+        StringBuilder sources = new StringBuilder("[");
+        for (Document document : answer.getSources()) {
+            if (sources.length() > 1) {
+                sources.append(',');
+            }
+            sources.append("{\"id\":").append(document.getId())
+                    .append(",\"title\":").append(quote(document.getTitle())).append('}');
+        }
+        sources.append(']');
+        return "{\"answer\":" + quote(answer.getText())
+                + ",\"fromLlm\":" + answer.isFromLlm()
+                + ",\"terms\":" + stringList(answer.getTerms())
+                + ",\"sources\":" + sources
+                + ",\"llmCalls\":" + llmCalls + "}";
+    }
+
+    /**
+     * A smart search: the usual search response plus the words the LLM added,
+     * a note when the LLM could not help, and the number of LLM calls so far.
+     */
+    public static String searchResponse(SearchResponse response, List<String> added, String llmNote, int llmCalls) {
+        String plain = searchResponse(response);
+        return plain.substring(0, plain.length() - 1) // drop the closing brace, then add the extra fields
+                + ",\"added\":" + stringList(added)
+                + (llmNote == null ? "" : ",\"llmNote\":" + quote(llmNote))
+                + ",\"llmCalls\":" + llmCalls + "}";
     }
 
     /** [{"word":"java","total":6,"documents":4}, ...] */

@@ -22,13 +22,14 @@ To use an IDE instead, open the `backend` folder in IntelliJ and mark `src` as t
 ```
 1. Index a folder
 2. Search
-3. Show the most frequent words
-4. Show search history
-5. Clear search history
-6. Exit
+3. Ask a question about your notes
+4. Show the most frequent words
+5. Show search history
+6. Clear search history
+7. Exit
 ```
 
-Choose 1 and press Enter to index the `sample-docs` folder, then choose 2 and type some words. You can ask for files that contain **all** the words or **any** of them. Option 3 lists the words that appear most often across all the files:
+Choose 1 and press Enter to index the `sample-docs` folder, then choose 2 and type some words. You can ask for files that contain **all** the words, **any** of them, or use **smart search** (Gemini adds related words). Option 3 answers a question from your notes with Gemini; both need `GEMINI_API_KEY` (see below). Option 4 lists the words that appear most often across all the files:
 
 ```
 The 10 most frequent words:
@@ -96,12 +97,14 @@ flowchart TD
 | `GET /api/search?q=java+thread&mode=any` | Searches, with `mode` set to `all` or `any` |
 | `GET /api/words?limit=10` | The most frequent words in the index |
 | `GET /api/document?id=6` | One whole document, so the website can show it with the matches highlighted |
+| `GET /api/search?q=concurrency&smart=1` | Smart search: Gemini adds related words, then the engine searches for any of them |
+| `GET /api/ask?q=what+is+a+deadlock` | Answers a question from the 3 best matching files, with the files as sources |
 | `GET /api/history` | Returns the last 10 searches |
 | `DELETE /api/history` | Clears the history |
 
 Any other address returns a file from the `frontend` folder. Each answer's exact shape and the error codes are listed in [frontend/README.md](../frontend/README.md#api).
 
-`WebServer` uses the `HttpServer` that comes with Java, so there is still nothing to install. It is the one part of the project outside the course topics, and it only passes messages along: all the searching is done by the classes below. Two safety choices are built in. It listens on `127.0.0.1`, so only your own computer can connect, and it refuses any file address that would leave the `frontend` folder.
+`WebServer` uses the `HttpServer` that comes with Java, so there is still nothing to install. Along with `GeminiProvider`, it is outside the course topics, and both only pass messages along: all the searching is done by the classes below. Two safety choices are built in. It listens on `127.0.0.1`, so only your own computer can connect, and it refuses any file address that would leave the `frontend` folder.
 
 ## The classes
 
@@ -121,7 +124,11 @@ All classes are in the package `docsearch`.
 | `SearchHistory`, `HistoryEntry` | Remember the last 10 searches, newest first | `LinkedList` |
 | `IndexNotReadyException` | Raised if you search before indexing | Custom exception |
 | `IndexStats`, `SearchResponse` | Small classes that carry answers back to the caller | Encapsulation |
-| `Json` | Writes the engine's answers as JSON text and reads one value from a request | Strings, `StringBuilder` |
+| `Json` | Writes the engine's answers as JSON text and reads one value from a request or a Gemini reply | Strings, `StringBuilder`, method overloading |
+| `LlmProvider`, `GeminiProvider`, `OfflineProvider` | Send a prompt to Gemini, or refuse when no key is set; every call is counted | Abstract class, inheritance, polymorphism; `HttpURLConnection` (outside the course) |
+| `QueryExpander` | Smart search: asks Gemini once per query for up to 5 related words | `HashMap` (remembers each answer) |
+| `AnswerGenerator`, `Answer` | Ask your notes: the engine finds the 3 best files, Gemini answers from them only | `HashMap`, encapsulation |
+| `LlmException` | Raised when Gemini cannot answer: no key, no internet, a wrong key | Custom exception |
 | `WebServer` | Lets the browser use the engine over HTTP, and serves the frontend files | The `HttpServer` that comes with Java (the only non-course topic) |
 | `Main` | Starts the console menu, or the web server when given `web` | `Scanner` |
 | `SelfTest` | Prints PASS or FAIL for each behaviour | Plain `main` method |
@@ -132,4 +139,15 @@ All classes are in the package `docsearch`.
 
 ## Tests
 
-`test.bat` runs 88 checks: the tokenizer, the loader, the index and its top words, both matchers, ranking of results and of word counts, snippets, history, the engine end to end, and the JSON the web server sends. The web server itself was checked by hand against every address, including error cases and attempts to read files outside the frontend folder.
+`test.bat` runs 108 checks: the tokenizer, the loader, the index and its top words, both matchers, ranking of results and of word counts, snippets, history, the engine end to end, the JSON the web server sends, and the Gemini layer (with a fake provider and a fake Gemini server, so no key or internet is needed).
+
+## Gemini (smart search and questions)
+
+Set your key in the same window before starting, so it never appears in the code:
+
+```bat
+set GEMINI_API_KEY=your-key-here
+serve.bat
+```
+
+`GEMINI_MODEL` picks another model (the default is `gemini-3.8-flash`). Each call asks for little thinking and a short reply, every answer is remembered, and nothing is sent when no file matches. Without a key, smart search is a normal search and a question lists the best files. The web server itself was checked by hand against every address, including error cases and attempts to read files outside the frontend folder.

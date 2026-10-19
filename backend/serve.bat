@@ -1,6 +1,7 @@
 @echo off
 rem Builds the project, then starts the web server and the frontend.
 rem Usage: serve.bat [port]      (the default port is 8080)
+rem For smart search and questions, first run:  set GEMINI_API_KEY=your-key-here
 
 cd /d "%~dp0"
 

@@ -1,6 +1,7 @@
 /*
  * Search app: indexing, searching, results, the document viewer, the most
- * frequent words and the search history. All data comes through window.Api
+ * frequent words, the search history, and the Gemini features (smart search
+ * and "Ask your notes", Java mode only). All data comes through window.Api
  * (see api.js), so this file works the same in browser mode and Java mode.
  */
 (function () {
@@ -40,7 +41,16 @@
     viewerPrev: $("viewer-prev"),
     viewerNext: $("viewer-next"),
     viewerBody: $("viewer-body"),
-    viewerClose: $("viewer-close")
+    viewerClose: $("viewer-close"),
+    smart: $("smart"),
+    smartLabel: $("smart-label"),
+    askPanel: $("ask-panel"),
+    askForm: $("ask-form"),
+    question: $("question"),
+    askBtn: $("ask-btn"),
+    answer: $("answer"),
+    askNote: $("ask-note"),
+    llmBadge: $("llm-badge")
   };
 
   // Searches that show off the sample files: two words in each mode, one word, and a miss in "all".
@@ -59,6 +69,7 @@
   let topWords = [];
   let lastData = null;     // the search on screen
   let lastTerms = [];      // its terms, for the viewer's highlights
+  let answerTerms = [];    // the search words of the last question, for highlighting its source files
   let shown = 0;           // how many of its results are drawn
   let searchSeq = 0;       // lets a newer search ignore the answer to an older one
   let pending = null;      // a search from the address bar, run once something is indexed
@@ -136,15 +147,25 @@
     );
   }
 
+  // After a smart search: the words Gemini added, or why it could not help.
+  function smartLine(data) {
+    if (!data.added) return "";
+    const words = data.added.map((w) => "<mark>" + esc(w) + "</mark>").join(" ");
+    const text = data.llmNote ? esc(data.llmNote)
+      : data.added.length ? "Gemini also searched for " + words : "Gemini found no related words to add.";
+    return '<p class="results__smart"><i class="ph ph-sparkle" aria-hidden="true"></i><span>' + text + "</span></p>";
+  }
+
   function renderResults(data) {
     lastTerms = data.terms;
+    const smart = smartLine(data);
     if (!data.terms.length) {
-      els.results.innerHTML = state("Nothing to search for", "Your words are all common ones that the index ignores, such as “the” or “and”. Try something more specific.");
+      els.results.innerHTML = smart + state("Nothing to search for", "Your words are all common ones that the index ignores, such as “the” or “and”. Try something more specific.");
       return;
     }
     if (!data.total) {
       const tryAny = data.mode === "all" && data.terms.length > 1;
-      els.results.innerHTML = state(
+      els.results.innerHTML = smart + state(
         "No files match",
         tryAny ? "No single file contains every word." : "None of the indexed files contain “" + data.terms.join(" ") + "”.",
         tryAny ? '<ul class="suggest">' + chip(data.query, "any", "Search for any of the words") + "</ul>" : ""
@@ -153,9 +174,9 @@
     }
     lastData = data;
     shown = Math.min(PAGE, data.total);
-    els.results.innerHTML =
+    els.results.innerHTML = smart +
       '<p class="results__meta">' + plural(data.total, "file") + " for “" + esc(data.query) + "”, " +
-        (data.mode === "any" ? "any word" : "all words") + ", in " + data.tookMs + " ms</p>" +
+        (data.added ? "smart search" : data.mode === "any" ? "any word" : "all words") + ", in " + data.tookMs + " ms</p>" +
       '<ul class="hits">' + rows(0, shown) + "</ul>" + moreButton();
   }
 
@@ -294,14 +315,25 @@
   }
 
   /* ---- Searching ------------------------------------------------------------ */
-  function writeUrl(q, mode) {
+  function writeUrl(q, mode, smart) {
     try {
       const url = new URL(location.href);
       url.searchParams.set("q", q);
       url.searchParams.set("mode", mode);
+      if (smart) url.searchParams.set("smart", "1");
+      else url.searchParams.delete("smart");
       history.replaceState(null, "", url);
     } catch (e) { /* a file:// page may refuse; the search still works */ }
   }
+
+  // Flashes the Index panel when something needs an index first.
+  function nudgeIndex() {
+    els.panel.classList.remove("nudge");
+    void els.panel.offsetWidth; // restart the flash if it is already running
+    els.panel.classList.add("nudge");
+  }
+
+  const smartOn = () => els.smart.checked && !els.smart.disabled;
 
   async function runSearch(query, mode) {
     query = query.trim();
@@ -317,20 +349,20 @@
         sampleButton(Api.mode === "java" ? "Use the sample-docs folder" : "Use the sample files"),
         "error"
       );
-      els.panel.classList.remove("nudge");
-      void els.panel.offsetWidth; // restart the flash if it is already running
-      els.panel.classList.add("nudge");
+      nudgeIndex();
       return;
     }
 
     const seq = ++searchSeq;
+    const smart = smartOn();
     showSkeleton();
-    writeUrl(query, mode);
+    writeUrl(query, mode, smart);
     try {
-      const data = await Api.search(query, mode);
+      const data = await Api.search(query, mode, smart);
       if (seq !== searchSeq) return;
       renderResults(data);
       renderHistory();
+      if (smart) showLlmNote();
     } catch (err) {
       if (seq !== searchSeq) return;
       if (err.code === "NOT_INDEXED") {
@@ -352,6 +384,73 @@
     runSearch(q, mode);
   }
 
+  /* ---- Ask your notes (Gemini) ---------------------------------------------- */
+  // Says whether Gemini can be used here, and how many calls it has had.
+  function showLlmNote() {
+    const llm = Api.llm;
+    if (Api.mode !== "java") {
+      els.askNote.textContent = "Smart search and questions need the Java engine (backend\\serve.bat) with a Gemini key, so they are off on this site.";
+    } else if (!llm || !llm.available) {
+      els.askNote.textContent = "Gemini is off: set GEMINI_API_KEY before starting serve.bat. Until then, questions list the best files and smart search is a normal search.";
+    } else {
+      els.askNote.textContent = "Gemini (" + llm.model + ") answers from the top 3 matching files only. Calls this session: " + llm.calls + ".";
+    }
+  }
+
+  function setupLlm() {
+    const java = Api.mode === "java";
+    const llm = Api.llm;
+    els.smart.disabled = !java;
+    els.question.disabled = !java;
+    els.askBtn.disabled = !java;
+    els.smartLabel.title = java ? "Gemini adds related words, then the engine searches for any of them" : "Needs the Java engine";
+    els.llmBadge.classList.toggle("badge--java", !!(llm && llm.available));
+    els.askPanel.classList.toggle("ask--off", !java);
+    showLlmNote();
+  }
+
+  async function runAsk() {
+    const question = els.question.value.trim();
+    if (!question || els.askBtn.disabled) {
+      els.question.focus();
+      return;
+    }
+    els.answer.hidden = false;
+    if (!indexed) {
+      els.answer.innerHTML = '<p class="answer__error">Index some files first, then ask.</p>';
+      nudgeIndex();
+      return;
+    }
+
+    els.askPanel.classList.add("busy");
+    els.askBtn.disabled = true;
+    els.answer.innerHTML = '<div class="skel" aria-hidden="true"><i></i><i></i><i></i></div>';
+    try {
+      renderAnswer(await Api.ask(question));
+      renderHistory(); // the question was also a search
+    } catch (err) {
+      els.answer.innerHTML = '<p class="answer__error">' + esc(err.message) + "</p>";
+    } finally {
+      els.askPanel.classList.remove("busy");
+      els.askBtn.disabled = false;
+      showLlmNote();
+    }
+  }
+
+  // The answer, with [file.txt] references marked, and the files it came from (click to read one).
+  function renderAnswer(data) {
+    answerTerms = data.terms || [];
+    const text = esc(data.answer).replace(/\[([^\]\n]+)\]/g, '<span class="cite">$1</span>');
+    const sources = (data.sources || [])
+      .map((s) => '<li><button class="source" type="button" data-source="' + s.id + '">' + esc(s.title) +
+        ' <i class="ph ph-arrow-up-right" aria-hidden="true"></i></button></li>')
+      .join("");
+    els.answer.innerHTML =
+      '<p class="answer__text' + (data.fromLlm ? "" : " answer__text--plain") + '">' + text + "</p>" +
+      (sources ? '<p class="answer__label">' + (data.fromLlm ? "Sources" : "Best matching files") + "</p>" +
+        '<ul class="answer__sources">' + sources + "</ul>" : "");
+  }
+
   /* ---- Document viewer ------------------------------------------------------ */
   const viewer = { marks: [], at: -1, opener: null };
 
@@ -366,7 +465,9 @@
     els.viewerPos.textContent = "Match " + (viewer.at + 1) + " of " + marks.length;
   }
 
-  async function openDocument(id, opener) {
+  // `terms` are the words to highlight: the search on screen, or the question that found this file.
+  async function openDocument(id, opener, terms) {
+    terms = terms || lastTerms;
     let doc;
     try {
       doc = await Api.document(id);
@@ -377,7 +478,7 @@
 
     els.viewerTitle.textContent = doc.title;
     els.viewerPath.textContent = doc.path;
-    els.viewerBody.innerHTML = highlight(doc.text, lastTerms);
+    els.viewerBody.innerHTML = highlight(doc.text, terms);
     viewer.marks = Array.from(els.viewerBody.querySelectorAll("mark"));
     viewer.at = -1;
     viewer.opener = opener || null;
@@ -388,7 +489,7 @@
       const word = m.textContent.toLowerCase();
       counts[word] = (counts[word] || 0) + 1;
     });
-    els.viewerTerms.innerHTML = lastTerms
+    els.viewerTerms.innerHTML = terms
       .filter((t) => counts[t])
       .map((t) => "<span><mark>" + esc(t) + "</mark> ×" + counts[t] + "</span>")
       .join("");
@@ -410,9 +511,29 @@
     runSearch(els.query.value, modeOf());
   });
 
-  // Switching the mode re-runs the search on screen, so the two answers are easy to compare.
+  // Switching the mode or smart search re-runs the search on screen, so the answers are easy to compare.
   els.searchForm.addEventListener("change", (e) => {
-    if (e.target.name === "mode" && indexed && els.query.value.trim()) runSearch(els.query.value, modeOf());
+    if ((e.target.name === "mode" || e.target === els.smart) && indexed && els.query.value.trim()) {
+      runSearch(els.query.value, modeOf());
+    }
+  });
+
+  els.askForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    runAsk();
+  });
+
+  // Enter asks; Shift+Enter starts a new line.
+  els.question.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      runAsk();
+    }
+  });
+
+  els.answer.addEventListener("click", (e) => {
+    const source = e.target.closest("[data-source]");
+    if (source) openDocument(source.dataset.source, source, answerTerms);
   });
 
   els.indexForm.addEventListener("submit", (e) => {
@@ -523,6 +644,7 @@
     if (!q) return;
     els.query.value = q;
     setMode(params.get("mode"));
+    els.smart.checked = params.get("smart") === "1"; // only takes effect with the Java engine
     pending = { q, mode: modeOf() };
   })();
 
@@ -541,6 +663,7 @@
 
     let status = null;
     try { status = await Api.status(); } catch (e) { /* treat as not indexed */ }
+    setupLlm();
     if (status) {
       await onIndexed(status, { restored: true });
     } else {

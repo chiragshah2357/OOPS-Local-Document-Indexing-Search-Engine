@@ -14,11 +14,19 @@ public class SnippetBuilder {
 
     /** The words in terms must already be lowercase, as the Tokenizer produces them. */
     public static String build(String text, List<String> terms) {
+        return build(text, terms, BEFORE, AFTER);
+    }
+
+    /**
+     * The same, with a chosen size (method overloading): "Ask your notes"
+     * gives the LLM a longer piece than a search result shows.
+     */
+    public static String build(String text, List<String> terms, int charsBefore, int charsAfter) {
         String flat = flatten(text);
         int at = findFirstMatch(flat, terms);
 
-        int start = Math.max(0, at - BEFORE);
-        int end = Math.min(flat.length(), at + AFTER);
+        int start = Math.max(0, at - charsBefore);
+        int end = Math.min(flat.length(), at + charsAfter);
         String piece = flat.substring(start, end).trim();
 
         // The cut can land in the middle of a word, so drop that half word.
