@@ -7,6 +7,10 @@ out/
 *.iml
 .vscode/
 
+# Secrets: the Gemini key belongs in an environment variable, never in a file here
+.env
+*.env
+
 # OS files
 .DS_Store
 Thumbs.db

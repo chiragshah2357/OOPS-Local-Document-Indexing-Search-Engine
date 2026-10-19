@@ -78,6 +78,8 @@ stateDiagram-v2
 - **Most frequent words:** the words that appear most often in the whole index (keyword frequency). Click one to search for it.
 - **Read a file:** click a result's name. Every match is highlighted; **n** (or the arrow buttons) jumps to the next match, **Shift+n** to the previous one, **Esc** closes it.
 - **History:** the last 10 searches, newest first. Click one to run it again.
+- **Smart search** (Java engine with a Gemini key): Gemini adds up to 5 related words, shown above the results, and the engine searches for any of them.
+- **Ask your notes** (Java engine with a Gemini key): type a question and press Enter. The answer names its files in brackets; click a source to read it. The panel shows how many Gemini calls have been made. On a static host such as Vercel both features are switched off, because the key must stay on your computer.
 - **Links:** a search is kept in the address, for example `app.html?q=java+thread&mode=any`. Opening such a link fills in the search and runs it as soon as something is indexed.
 - **Keyboard:** **/** jumps to the search box.
 
@@ -119,9 +121,10 @@ These are the endpoints the Java backend implements. All answers are JSON.
 
 | Request | Body or query | Response |
 |---|---|---|
-| `GET /api/health` | none | `{ "ok": true, "index": null }`, or the index stats below once something is indexed |
+| `GET /api/health` | none | `{ "ok": true, "index": null, "llm": { "available", "model", "calls" } }`, with the index stats below once something is indexed |
 | `POST /api/index` | `{ "path": "C:\\notes" }` | `{ "path", "documents", "terms", "tookMs", "skipped" }` |
-| `GET /api/search` | `q` (text), `mode` (`all` or `any`) | see below |
+| `GET /api/search` | `q` (text), `mode` (`all` or `any`), optional `smart=1` | see below; a smart search also has `added` (the words Gemini added), `llmNote` when Gemini could not help, and `llmCalls` |
+| `GET /api/ask` | `q` (a question) | `{ "answer", "fromLlm", "terms", "sources": [ { "id", "title" } ], "llmCalls" }` |
 | `GET /api/words` | `limit` (1 to 100, default 10) | `[ { "word", "total", "documents" } ]`, most frequent first |
 | `GET /api/document` | `id` (a result's `id`) | `{ "id", "title", "path", "text" }` |
 | `GET /api/history` | none | `[ { "query", "mode", "at" } ]`, newest first, at most 10 |
@@ -164,6 +167,7 @@ Errors are `{ "error": "message", "code": "CODE" }` with a non-2xx status:
 | `BAD_PATH` | 400 | The folder path is missing or is not a folder. |
 | `EMPTY_QUERY` | 400 | The search had no words. |
 | `BAD_ID` | 400 | The document id is not a number. |
+| `LLM_ERROR` | 502 | Gemini could not answer a question (wrong key, no internet, usage limit). The message says which. |
 | `NOT_FOUND` | 404 | No such address, or no document with that id. |
 | `METHOD_NOT_ALLOWED` | 405 | The address does not accept that kind of request. |
 | `SERVER_ERROR` | 500 | Something unexpected went wrong. |
