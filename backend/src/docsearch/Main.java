@@ -10,8 +10,11 @@ import java.util.Scanner;
 /**
  * The starting point of the program. It can run in two ways:
  *
- *   run.bat    a console menu: index a folder, search it, look at the history
+ *   run.bat    a console menu: index a folder, search it, ask questions, look at the history
  *   serve.bat  a web server, so the browser frontend can use the engine
+ *
+ * Smart search and questions use Gemini when the GEMINI_API_KEY environment
+ * variable is set (see LlmProvider); everything else works without it.
  *
  * Both use the same SearchEngine. The word "web" as the first argument
  * chooses the web server; anything else starts the console menu.
@@ -50,7 +53,8 @@ public class Main {
             return;
         }
 
-        WebServer server = new WebServer(new SearchEngine(), webRoot);
+        LlmProvider llm = LlmProvider.fromEnvironment();
+        WebServer server = new WebServer(new SearchEngine(), llm, webRoot);
         try {
             server.start(port);
         } catch (IOException e) {
@@ -60,26 +64,32 @@ public class Main {
         }
 
         System.out.println("DocSearch is running at http://localhost:" + port);
+        System.out.println(describeLlm(llm));
         System.out.println("Open that address in your browser. Press Ctrl+C to stop.");
     }
 
     private static void runConsole() {
         SearchEngine engine = new SearchEngine();
+        LlmProvider llm = LlmProvider.fromEnvironment();
+        QueryExpander expander = new QueryExpander(llm);
+        AnswerGenerator answers = new AnswerGenerator(engine, llm);
         Scanner input = new Scanner(System.in);
 
         System.out.println("DocSearch: search the text files of a folder");
+        System.out.println(describeLlm(llm));
 
         while (true) {
             System.out.println();
             System.out.println("1. Index a folder");
             System.out.println("2. Search");
-            System.out.println("3. Show the most frequent words");
-            System.out.println("4. Show search history");
-            System.out.println("5. Clear search history");
-            System.out.println("6. Exit");
+            System.out.println("3. Ask a question about your notes");
+            System.out.println("4. Show the most frequent words");
+            System.out.println("5. Show search history");
+            System.out.println("6. Clear search history");
+            System.out.println("7. Exit");
 
             String choice = ask(input, "Choose an option: ");
-            if (choice == null || choice.equals("6")) {
+            if (choice == null || choice.equals("7")) {
                 System.out.println("Goodbye.");
                 return;
             }
@@ -87,18 +97,27 @@ public class Main {
             if (choice.equals("1")) {
                 indexFolder(engine, input);
             } else if (choice.equals("2")) {
-                search(engine, input);
+                search(engine, expander, llm, input);
             } else if (choice.equals("3")) {
-                showTopWords(engine);
+                askQuestion(engine, answers, llm, input);
             } else if (choice.equals("4")) {
-                showHistory(engine);
+                showTopWords(engine);
             } else if (choice.equals("5")) {
+                showHistory(engine);
+            } else if (choice.equals("6")) {
                 engine.clearHistory();
                 System.out.println("Search history cleared.");
             } else {
-                System.out.println("Please type a number from 1 to 6.");
+                System.out.println("Please type a number from 1 to 7.");
             }
         }
+    }
+
+    private static String describeLlm(LlmProvider llm) {
+        if (llm.isAvailable()) {
+            return "Gemini (" + llm.getModel() + ") is on for smart search and questions.";
+        }
+        return "Gemini is off. Set GEMINI_API_KEY before starting to use smart search and questions.";
     }
 
     // Prints a prompt and reads one line. Returns null when the input has ended.
@@ -131,7 +150,7 @@ public class Main {
         }
     }
 
-    private static void search(SearchEngine engine, Scanner input) {
+    private static void search(SearchEngine engine, QueryExpander expander, LlmProvider llm, Scanner input) {
         if (!engine.isReady()) {
             System.out.println("Index a folder first (option 1).");
             return;
@@ -141,16 +160,71 @@ public class Main {
         if (words == null || words.isEmpty()) {
             return;
         }
-        String mode = ask(input, "Match all words (1) or any word (2)? [1]: ");
+        String mode = ask(input, "Match all words (1), any word (2), or smart search with Gemini (3)? [1]: ");
         if (mode == null) {
             return;
         }
-        String modeName = mode.equals("2") ? "any" : "all";
 
         try {
-            printResults(engine.search(words, modeName));
+            if (mode.equals("3")) {
+                printResults(engine.search(words + " " + related(expander, llm, words), "any"));
+            } else {
+                printResults(engine.search(words, mode.equals("2") ? "any" : "all"));
+            }
         } catch (IndexNotReadyException e) {
             System.out.println(e.getMessage());
+        }
+    }
+
+    // Smart search: the words Gemini suggests, joined by spaces. Empty when Gemini is off or fails.
+    private static String related(QueryExpander expander, LlmProvider llm, String words) {
+        if (!llm.isAvailable()) {
+            System.out.println("Gemini is off, so this is a normal search for any of the words.");
+            return "";
+        }
+        try {
+            List<String> added = expander.expand(words);
+            System.out.println("Gemini added: " + (added.isEmpty() ? "nothing" : added) + "  (calls so far: " + llm.getCalls() + ")");
+            StringBuilder text = new StringBuilder();
+            for (String word : added) {
+                text.append(word).append(' ');
+            }
+            return text.toString().trim();
+        } catch (LlmException e) {
+            System.out.println(e.getMessage() + " This is a normal search for any of the words.");
+            return "";
+        }
+    }
+
+    private static void askQuestion(SearchEngine engine, AnswerGenerator answers, LlmProvider llm, Scanner input) {
+        if (!engine.isReady()) {
+            System.out.println("Index a folder first (option 1).");
+            return;
+        }
+        String question = ask(input, "Your question: ");
+        if (question == null || question.isEmpty()) {
+            return;
+        }
+
+        try {
+            Answer answer = answers.answer(question);
+            System.out.println();
+            System.out.println(answer.getText());
+            if (!answer.getSources().isEmpty()) {
+                StringBuilder files = new StringBuilder();
+                for (Document document : answer.getSources()) {
+                    if (files.length() > 0) {
+                        files.append(", ");
+                    }
+                    files.append(document.getTitle());
+                }
+                System.out.println("Sources: " + files);
+            }
+            System.out.println("(Gemini calls so far: " + llm.getCalls() + ")");
+        } catch (IndexNotReadyException e) {
+            System.out.println(e.getMessage());
+        } catch (LlmException e) {
+            System.out.println("Could not get an answer: " + e.getMessage());
         }
     }
 

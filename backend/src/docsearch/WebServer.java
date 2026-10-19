@@ -13,7 +13,9 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -24,7 +26,7 @@ import java.util.Map;
  * back as JSON. It also hands out the frontend files themselves, so one
  * program serves the whole application.
  *
- * This is the only class that needs something outside the course: the
+ * Like GeminiProvider, it needs something outside the course: the
  * HttpServer that comes with Java. All the searching is still done by the
  * classes you already know.
  *
@@ -37,11 +39,17 @@ public class WebServer {
     private static final int MAX_WORDS = 100;
 
     private final SearchEngine engine;
+    private final LlmProvider llm;
+    private final QueryExpander expander;
+    private final AnswerGenerator answers;
     private final File webRoot; // the folder with index.html, app.html, css and js
     private HttpServer server;
 
-    public WebServer(SearchEngine engine, File webRoot) {
+    public WebServer(SearchEngine engine, LlmProvider llm, File webRoot) {
         this.engine = engine;
+        this.llm = llm;
+        this.expander = new QueryExpander(llm);
+        this.answers = new AnswerGenerator(engine, llm);
         this.webRoot = webRoot;
     }
 
@@ -83,8 +91,8 @@ public class WebServer {
             String method = exchange.getRequestMethod();
 
             if (path.equals("/api/health")) {
-                // Also says what is indexed, so a reloaded page can pick up where it left off.
-                sendJson(exchange, 200, Json.health(engine.getIndexStats()));
+                // Also says what is indexed, so a reloaded page can pick up where it left off, and whether Gemini is set up.
+                sendJson(exchange, 200, Json.health(engine.getIndexStats(), llm));
             } else if (path.equals("/api/index")) {
                 if (method.equals("POST")) {
                     indexFolder(exchange);
@@ -94,6 +102,12 @@ public class WebServer {
             } else if (path.equals("/api/search")) {
                 if (method.equals("GET")) {
                     search(exchange);
+                } else {
+                    wrongMethod(exchange);
+                }
+            } else if (path.equals("/api/ask")) {
+                if (method.equals("GET")) {
+                    ask(exchange);
                 } else {
                     wrongMethod(exchange);
                 }
@@ -139,7 +153,7 @@ public class WebServer {
             }
         }
 
-        // GET /api/search?q=java+thread&mode=any
+        // GET /api/search?q=java+thread&mode=any      (add &smart=1 for a smart search)
         private void search(HttpExchange exchange) throws IOException {
             Map<String, String> params = parseQuery(exchange.getRequestURI().getRawQuery());
             String words = params.get("q");
@@ -149,10 +163,57 @@ public class WebServer {
             }
 
             try {
-                SearchResponse response = engine.search(words, params.get("mode"));
-                sendJson(exchange, 200, Json.searchResponse(response));
+                if ("1".equals(params.get("smart"))) {
+                    smartSearch(exchange, words);
+                } else {
+                    SearchResponse response = engine.search(words, params.get("mode"));
+                    sendJson(exchange, 200, Json.searchResponse(response));
+                }
             } catch (IndexNotReadyException e) {
                 sendJson(exchange, 409, Json.error(e.getMessage(), "NOT_INDEXED"));
+            }
+        }
+
+        // Smart search: Gemini suggests related words, then the same engine searches for all of them (any word).
+        private void smartSearch(HttpExchange exchange, String words) throws IOException, IndexNotReadyException {
+            if (!engine.isReady()) {
+                throw new IndexNotReadyException(); // no point asking Gemini before there is anything to search
+            }
+            List<String> added = new ArrayList<String>();
+            String note = null;
+            if (!llm.isAvailable()) {
+                note = "Gemini is not set up, so this was a normal search.";
+            } else {
+                try {
+                    added = expander.expand(words);
+                } catch (LlmException e) {
+                    note = e.getMessage() + " This was a normal search.";
+                }
+            }
+
+            StringBuilder all = new StringBuilder(words);
+            for (String word : added) {
+                all.append(' ').append(word);
+            }
+            SearchResponse response = engine.search(all.toString(), "any");
+            sendJson(exchange, 200, Json.searchResponse(response, added, note, llm.getCalls()));
+        }
+
+        // GET /api/ask?q=what+is+a+deadlock
+        private void ask(HttpExchange exchange) throws IOException {
+            String question = parseQuery(exchange.getRequestURI().getRawQuery()).get("q");
+            if (question == null || question.trim().isEmpty()) {
+                sendJson(exchange, 400, Json.error("Type a question.", "EMPTY_QUERY"));
+                return;
+            }
+
+            try {
+                Answer answer = answers.answer(question);
+                sendJson(exchange, 200, Json.answer(answer, llm.getCalls()));
+            } catch (IndexNotReadyException e) {
+                sendJson(exchange, 409, Json.error(e.getMessage(), "NOT_INDEXED"));
+            } catch (LlmException e) {
+                sendJson(exchange, 502, Json.error(e.getMessage(), "LLM_ERROR"));
             }
         }
 

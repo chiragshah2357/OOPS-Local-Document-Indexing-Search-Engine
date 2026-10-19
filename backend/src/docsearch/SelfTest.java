@@ -1,8 +1,16 @@
 package docsearch;
 
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpServer;
+
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -33,6 +41,8 @@ public class SelfTest {
         testHistory();
         testSearchEngine();
         testJson();
+        testLlm();
+        testGemini();
 
         System.out.println();
         System.out.println(passed + " passed, " + failed + " failed");
@@ -312,9 +322,16 @@ public class SelfTest {
                 Json.history(entries).equals("[{\"query\":\"java\",\"mode\":\"all\",\"at\":123},{\"query\":\"a \\\"b\\\"\",\"mode\":\"any\",\"at\":456}]"));
         check("an empty history is an empty list", Json.history(new ArrayList<HistoryEntry>()).equals("[]"));
 
-        check("health says nothing is indexed yet", Json.health(null).equals("{\"ok\":true,\"index\":null}"));
+        check("health says nothing is indexed yet, and that Gemini is off",
+                Json.health(null, new OfflineProvider()).equals(
+                        "{\"ok\":true,\"index\":null,\"llm\":{\"available\":false,\"model\":\"none\",\"calls\":0}}"));
         check("health includes the index stats once there is an index",
-                Json.health(new IndexStats("sample-docs", 6, 169, 5, 0)).startsWith("{\"ok\":true,\"index\":{\"path\":\"sample-docs\",\"documents\":6"));
+                Json.health(new IndexStats("sample-docs", 6, 169, 5, 0), new OfflineProvider())
+                        .startsWith("{\"ok\":true,\"index\":{\"path\":\"sample-docs\",\"documents\":6"));
+        Answer answer = new Answer("Yes [a.txt]", Arrays.asList(new Document(2, "a.txt", "a.txt", "x")), Arrays.asList("thread"), true);
+        check("an answer lists its text, its search words and its source files",
+                Json.answer(answer, 3).equals("{\"answer\":\"Yes [a.txt]\",\"fromLlm\":true,\"terms\":[\"thread\"],"
+                        + "\"sources\":[{\"id\":2,\"title\":\"a.txt\"}],\"llmCalls\":3}"));
         check("top words are a list of word, total and documents",
                 Json.words(Arrays.asList(new WordCount("java", 6, 4), new WordCount("file", 5, 2))).equals(
                         "[{\"word\":\"java\",\"total\":6,\"documents\":4},{\"word\":\"file\",\"total\":5,\"documents\":2}]"));
@@ -344,6 +361,171 @@ public class SelfTest {
                 json.contains("\"title\":\"threads-and-synchronization.txt\"") && json.contains("\"score\":3")
                         && json.contains("\"matches\":{\"java\":1,\"thread\":2}"));
         check("paths in a search response use forward slashes", json.contains("\"path\":\"sample-docs/threads-and-synchronization.txt\""));
+
+        String smart;
+        try {
+            smart = Json.searchResponse(engine.search("thread lock", "any"), Arrays.asList("lock"), null, 1);
+        } catch (IndexNotReadyException e) {
+            smart = "";
+        }
+        check("a smart search response adds the words Gemini suggested and the call count",
+                smart.contains("\"results\":[") && smart.endsWith(",\"added\":[\"lock\"],\"llmCalls\":1}"));
+    }
+
+    /** A stand-in for Gemini: it gives the same reply to every prompt and remembers the last prompt. */
+    static class FakeProvider extends LlmProvider {
+        private final String reply;
+        private String lastPrompt = "";
+
+        FakeProvider(String reply) {
+            this.reply = reply;
+        }
+
+        public String complete(String prompt, int maxTokens) {
+            recordCall();
+            lastPrompt = prompt;
+            return reply;
+        }
+
+        public boolean isAvailable() {
+            return true;
+        }
+
+        public String getModel() {
+            return "fake";
+        }
+    }
+
+    private static void testLlm() throws IOException {
+        FakeProvider fake = new FakeProvider("Concurrency, thread, the Deadlock, synchronization, lock, mutex, extra");
+        QueryExpander expander = new QueryExpander(fake);
+        try {
+            check("smart search adds up to 5 related words, lowercase, without stop words or the query's own words",
+                    expander.expand("Thread").toString().equals("[concurrency, deadlock, synchronization, lock, mutex]"));
+            expander.expand("thread");
+            check("the same query is sent to the LLM only once", fake.getCalls() == 1);
+            check("a query of only stop words is never sent to the LLM",
+                    expander.expand("the and of").isEmpty() && fake.getCalls() == 1);
+        } catch (LlmException e) {
+            check("the expander must not fail with a working provider", false);
+        }
+
+        boolean refused = false;
+        try {
+            new OfflineProvider().complete("hello", 10);
+        } catch (LlmException e) {
+            refused = true;
+        }
+        check("the offline provider refuses, and says it is not available", refused && !new OfflineProvider().isAvailable());
+
+        check("the longer snippet for the LLM is cut on whole words around the match",
+                SnippetBuilder.build("one two three four five six seven", Arrays.asList("four"), 5, 5).equals("... four ..."));
+
+        SearchEngine engine = new SearchEngine();
+        engine.indexFolder("sample-docs");
+        FakeProvider writer = new FakeProvider("A thread is the smallest unit of execution [threads-and-synchronization.txt].");
+        AnswerGenerator answers = new AnswerGenerator(engine, writer);
+        try {
+            Answer answer = answers.answer("What is a thread?");
+            check("an answer is written by the LLM and names the best file first",
+                    answer.isFromLlm() && answer.getSources().get(0).getTitle().equals("threads-and-synchronization.txt"));
+            check("at most 3 files go to the LLM", answer.getSources().size() <= AnswerGenerator.MAX_FILES);
+            check("the prompt holds the question and the matching notes",
+                    writer.lastPrompt.contains("Question: What is a thread?")
+                            && writer.lastPrompt.contains("[threads-and-synchronization.txt] A thread is"));
+            answers.answer("what is a thread?  ");
+            check("asking the same question again does not call the LLM again", writer.getCalls() == 1);
+
+            Answer none = answers.answer("zebra giraffe");
+            check("when no file matches, the LLM is not asked", !none.isFromLlm() && none.getSources().isEmpty() && writer.getCalls() == 1);
+
+            Answer offline = new AnswerGenerator(engine, new OfflineProvider()).answer("What is a thread?");
+            check("without Gemini, a question still lists the best files", !offline.isFromLlm() && offline.getSources().size() == 1);
+        } catch (Exception e) {
+            check("asking questions must not fail with a working provider (" + e + ")", false);
+        }
+    }
+
+    private static void testGemini() throws IOException {
+        check("the Gemini request holds the prompt, the token limit and low thinking",
+                Json.geminiRequest("say \"hi\"", 64, true).equals("{\"contents\":[{\"parts\":[{\"text\":\"say \\\"hi\\\"\"}]}],"
+                        + "\"generationConfig\":{\"maxOutputTokens\":64,\"thinkingConfig\":{\"thinkingLevel\":\"LOW\"}}}"));
+        check("the request can leave out the thinking setting", !Json.geminiRequest("x", 64, false).contains("thinking"));
+
+        try {
+            check("the answer is read from candidates[0].content.parts[0].text",
+                    GeminiProvider.readText("{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"thread, lock\"}],"
+                            + "\"role\":\"model\"},\"finishReason\":\"STOP\"}]}").equals("thread, lock"));
+        } catch (LlmException e) {
+            check("a normal Gemini reply must be readable", false);
+        }
+        boolean empty = false;
+        try {
+            GeminiProvider.readText("{\"candidates\":[]}");
+        } catch (LlmException e) {
+            empty = true;
+        }
+        check("an empty reply is an error, not an empty answer", empty);
+
+        // A tiny fake Gemini on this computer, so the HTTP part is tested without the internet.
+        // It refuses the thinking setting (as some models do) and rejects the key "bad-key".
+        final List<String> requests = new ArrayList<String>();
+        HttpServer fake = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        fake.createContext("/", new HttpHandler() {
+            public void handle(HttpExchange exchange) throws IOException {
+                String body = readAll(exchange.getRequestBody());
+                String key = exchange.getRequestHeaders().getFirst("x-goog-api-key");
+                requests.add(key + " " + exchange.getRequestURI().getPath());
+                int status;
+                String reply;
+                if ("bad-key".equals(key)) {
+                    status = 400;
+                    reply = "{\"error\":{\"code\":400,\"message\":\"API key not valid. Please pass a valid API key.\"}}";
+                } else if (body.contains("thinkingLevel")) {
+                    status = 400;
+                    reply = "{\"error\":{\"code\":400,\"message\":\"Thinking level is not supported for this model.\"}}";
+                } else {
+                    status = 200;
+                    reply = "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"concurrency, lock\"}]}}]}";
+                }
+                byte[] bytes = reply.getBytes(StandardCharsets.UTF_8);
+                exchange.sendResponseHeaders(status, bytes.length);
+                exchange.getResponseBody().write(bytes);
+                exchange.close();
+            }
+        });
+        fake.start();
+        String address = "http://127.0.0.1:" + fake.getAddress().getPort() + "/v1beta/models/";
+        try {
+            GeminiProvider gemini = new GeminiProvider("test-key", "test-model", address);
+            check("a model that refuses the thinking setting is asked once more without it",
+                    gemini.complete("related words for thread", 64).equals("concurrency, lock") && gemini.getCalls() == 2);
+            check("the key goes in the x-goog-api-key header and the model in the address",
+                    requests.get(0).equals("test-key /v1beta/models/test-model:generateContent"));
+        } catch (LlmException e) {
+            check("the call to the fake Gemini must work (" + e.getMessage() + ")", false);
+        }
+
+        GeminiProvider wrongKey = new GeminiProvider("bad-key", "test-model", address);
+        String message = "";
+        try {
+            wrongKey.complete("hello", 64);
+        } catch (LlmException e) {
+            message = e.getMessage();
+        }
+        check("a wrong API key gives a clear message and is not retried",
+                message.contains("did not accept the API key") && wrongKey.getCalls() == 1);
+        fake.stop(0);
+    }
+
+    private static String readAll(InputStream in) throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        byte[] buffer = new byte[4096];
+        int count;
+        while ((count = in.read(buffer)) != -1) {
+            bytes.write(buffer, 0, count);
+        }
+        return new String(bytes.toByteArray(), StandardCharsets.UTF_8);
     }
 
     // The scores of a response as text, for example [3, 2, 2, 1].
