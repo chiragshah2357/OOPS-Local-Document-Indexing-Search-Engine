@@ -178,10 +178,9 @@ Vercel hosts static files, so the deployed site runs in browser mode. It cannot 
 
 1. Push the repository to GitHub.
 2. On vercel.com choose **Add New, Project** and import the repository.
-3. Set **Framework Preset** to `Other` and **Root Directory** to `frontend`.
-4. Leave **Build Command** and **Output Directory** empty, then deploy.
+3. Set **Framework Preset** to `Other`, leave the other settings as they are, and deploy.
 
-No `vercel.json` is needed. The landing page opens first, and **Open the app** leads into the search app. On the hosted site the app makes no request to `/api`, because the address is not `localhost`.
+The `vercel.json` at the top of the repository sets `"outputDirectory": "frontend"`, so Vercel publishes this folder at the root address (without it, the site would only appear under `/frontend/`). The landing page opens first, and **Open the app** leads into the search app. On the hosted site the app makes no request to `/api`, because the address is not `localhost`.
 
 ## Design notes
 
