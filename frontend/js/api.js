@@ -11,6 +11,9 @@
  *     engine in engine.js indexes the sample files, or files the visitor
  *     picks, inside the tab. Nothing is uploaded.
  *
+ * Smart search and questions use Gemini, which only the Java backend can
+ * call (the API key stays on your computer), so they need Java mode.
+ *
  * Every function returns a Promise. Failures reject with an Error that may
  * carry a `code`, for example "NOT_INDEXED". Wait for Api.ready before
  * reading Api.mode.
@@ -100,11 +103,18 @@
   }
 
   const java = {
-    status: async () => (await http("GET", "/health")).index || null,
+    status: async () => {
+      const info = await http("GET", "/health");
+      llmInfo = info.llm || null;
+      return info.index || null;
+    },
     indexSamples: () => http("POST", "/index", { path: SAMPLE_FOLDER }),
     indexFolder: (path) => http("POST", "/index", { path }),
     indexFiles: async () => { throw fail("With the Java backend, type the folder path instead.", "BAD_PATH"); },
-    search: (query, mode) => http("GET", "/search?q=" + encodeURIComponent(query) + "&mode=" + encodeURIComponent(mode)),
+    // smart: Gemini adds related words, and the engine searches for any of them.
+    search: (query, mode, smart) =>
+      http("GET", "/search?q=" + encodeURIComponent(query) + "&mode=" + encodeURIComponent(mode) + (smart ? "&smart=1" : "")),
+    ask: (question) => http("GET", "/ask?q=" + encodeURIComponent(question)),
     words: (limit) => http("GET", "/words?limit=" + encodeURIComponent(limit)),
     document: (id) => http("GET", "/document?id=" + encodeURIComponent(id)),
     history: () => http("GET", "/history"),
@@ -113,6 +123,7 @@
 
   /* ---- Choosing between them ------------------------------------------------ */
   let useJava = false; // true once the Java backend has answered /api/health
+  let llmInfo = null;  // { available, model, calls } from the Java backend; null in browser mode
   let readyPromise = null;
 
   // The Java backend only listens on this computer, so on any other address
@@ -134,6 +145,7 @@
       const res = await fetch(API_BASE + "/health", { cache: "no-store", signal: controller.signal });
       const info = await res.json(); // a static server answers 404 or HTML, which fails here
       useJava = res.ok && info.ok === true;
+      llmInfo = useJava ? info.llm || null : null;
     } catch (e) {
       useJava = false;
     } finally {
@@ -154,6 +166,8 @@
   window.Api = {
     get ready() { return ensureReady(); },
     get mode() { return useJava ? "java" : "browser"; },
+    // Gemini's state on the Java backend ({ available, model, calls }), or null when there is no backend.
+    get llm() { return useJava ? llmInfo : null; },
 
     // True when the index holds the bundled sample files, so the app can suggest searches that fit them.
     isSampleIndex: (stats) => !!stats && (stats.path === SAMPLE_FOLDER || stats.path === SAMPLE_LABEL),
@@ -162,7 +176,18 @@
     indexSamples: async () => (await active()).indexSamples(),
     indexFolder: async (path) => (await active()).indexFolder(path),
     indexFiles: async (read) => (await active()).indexFiles(read),
-    search: async (query, mode) => (await active()).search(query, mode),
+    search: async (query, mode, smart) => {
+      const data = await (await active()).search(query, mode, smart);
+      if (llmInfo && typeof data.llmCalls === "number") llmInfo.calls = data.llmCalls;
+      return data;
+    },
+    ask: async (question) => {
+      const engine = await active();
+      if (!engine.ask) throw fail("Questions need the Java engine with a Gemini key.", "LLM_UNAVAILABLE");
+      const data = await engine.ask(question);
+      if (llmInfo) llmInfo.calls = data.llmCalls;
+      return data;
+    },
     words: async (limit) => (await active()).words(limit),
     document: async (id) => (await active()).document(id),
     history: async () => (await active()).history(),
