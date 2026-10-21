@@ -413,8 +413,9 @@ The sample files give the same answers in both engines, which the tests and the 
 The website is plain static files with no build step, so it can be hosted on Vercel:
 
 1. On vercel.com choose **Add New, Project** and import this repository.
-2. Set **Framework Preset** to `Other` and **Root Directory** to `frontend`.
-3. Leave the build settings empty and deploy.
+2. Set **Framework Preset** to `Other`, leave the other settings as they are, and deploy.
+
+`vercel.json` at the top of the repository tells Vercel to publish the `frontend` folder, so the site opens at the root address without setting a Root Directory.
 
 Vercel cannot run the Java server, so the hosted site runs in browser mode: visitors can index the sample files or their own folder, with nothing uploaded. More detail is in [frontend/README.md](frontend/README.md).
 
